@@ -1,0 +1,19 @@
+[package]
+name = "arcdps_squad_manager"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+log = "0.4"
+fern = "0.5"
+windows = "0.21.1"
+backtrace = "0.3"
+arcdps = { git = "https://github.com/greaka/arcdps_bindings.git", default-features = false } # `default-features = false` turns off logging through arcdps log
+winapi = { version = "0.3", features = ["consoleapi", "dbghelp", "psapi"] }
+stdext = "0.3"
+chrono = "0.4"
