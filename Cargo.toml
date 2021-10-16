@@ -9,9 +9,9 @@ edition = "2018"
 crate-type = ["cdylib"]
 
 [dependencies]
+lazy_static = "1.4.0"
 log = "0.4"
-fern = "0.5"
-windows = "0.21.1"
+flexi_logger = { version = "0.19", default_features = false, features = ["async", "compress"] }
 backtrace = "0.3"
 arcdps = { git = "https://github.com/greaka/arcdps_bindings.git", default-features = false } # `default-features = false` turns off logging through arcdps log
 winapi = { version = "0.3", features = ["consoleapi", "dbghelp", "psapi"] }

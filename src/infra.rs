@@ -1,5 +1,8 @@
+#![allow(non_snake_case)]
+
 use backtrace::Backtrace;
-use std::path::Path;
+use lazy_static::lazy_static;
+use std::sync::Mutex;
 use winapi::shared::ntdef::TRUE;
 use winapi::um::dbghelp;
 use winapi::um::processthreadsapi::{GetCurrentProcess, GetCurrentThreadId};
@@ -45,29 +48,39 @@ fn get_current_thread_id() -> u32 {
     }
 }
 
-pub fn install_log_handler() -> Result<(), Box<dyn std::error::Error>> {
-    let log_dir = Path::new("addons/logs/arcdps_squad_manager");
-    std::fs::create_dir_all(log_dir)?;
-    let log_file = fern::log_file(log_dir.join("arcdps_squad_manager.txt"))?;
-    fern::Dispatch::new()
-        .format(|out, message, record| {
-            let now = chrono::Local::now();
-            out.finish(format_args!(
-                "{time} {thread_id} {level:.1} {message}",
-                time = now.format("%b %d %H:%M:%S.%6f"),
-                thread_id = get_current_thread_id(),
-                level = record.level(),
-                message = message,
-            ))
-        })
-        .chain(
-            fern::Dispatch::new()
-                .level(log::LevelFilter::Trace)
-                .chain(log_file),
-        )
-        .apply()?;
+lazy_static! {
+    static ref LOGGER: Mutex<Option<flexi_logger::LoggerHandle>> = Mutex::new(None);
+}
 
-    return Ok(());
+pub fn install_log_handler() -> Result<(), flexi_logger::FlexiLoggerError> {
+    use flexi_logger::*;
+
+    *LOGGER.lock().unwrap() = Some(
+        Logger::try_with_str("info")?
+            .log_to_file(
+                FileSpec::default()
+                    .directory("addons/logs/arcdps_squad_manager")
+                    .basename("arcdps_squad_manager"),
+            )
+            .rotate(
+                Criterion::AgeOrSize(Age::Day, 128 * 1024 * 1024),
+                Naming::Numbers,
+                Cleanup::KeepCompressedFiles(16),
+            )
+            .format(|write, now, record| {
+                write.write_fmt(format_args!(
+                    "{time} {thread_id} {level:.1} {message}",
+                    time = now.now().format("%b %d %H:%M:%S.%6f"),
+                    thread_id = get_current_thread_id(),
+                    level = record.level(),
+                    message = &record.args()
+                ))
+            })
+            .write_mode(WriteMode::Direct)
+            .start()?,
+    );
+
+    Ok(())
 }
 
 pub fn install_panic_handler() {
@@ -139,7 +152,7 @@ fn panic_handler(pPanicInfo: &std::panic::PanicInfo) {
         };
 
         error!(
-            "{i}: {module_name}+0x{module_offset}({symbol_name}+0x{symbol_offset:x}) [0x{addr:x}] {file}:{line}",
+            "{i}: {module_name}+0x{module_offset:x}({symbol_name}+0x{symbol_offset:x}) [0x{addr:x}] {file}:{line}",
             i = i,
             module_name = module_name,
             module_offset = module_offset,
