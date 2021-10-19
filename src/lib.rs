@@ -1,3 +1,5 @@
+#![feature(atomic_from_mut)]
+
 #[macro_use]
 mod infra;
 
@@ -25,13 +27,8 @@ fn init() {
 
     install_panic_handler();
     info!("{}", "started panic handler");
-
-    let x: Result<u32, &str> = Err("emergency failure");
-    x.expect("Testing expect"); // panics with `Testing expect: emergency failure`
-
-    info!("{}", "how did this logline happen?");
 }
 
 fn release() {
-    // info!("release")
+    info!("release");
 }
