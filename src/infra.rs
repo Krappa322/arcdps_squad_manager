@@ -135,9 +135,12 @@ pub fn install_log_handler() -> Result<(), flexi_logger::FlexiLoggerError> {
                 Cleanup::KeepCompressedFiles(16),
             )
             .format(|write, now, record| {
+                let format = time::macros::format_description!(
+                    "[month repr:short] [day] [hour repr:24]:[minute]:[second].[subsecond digits:6]"
+                );
                 write.write_fmt(format_args!(
                     "{time} {thread_id} {level:.1} {message}",
-                    time = now.now().format("%b %d %H:%M:%S.%6f"),
+                    time = now.now().format(&format).unwrap_or("Unknown time".to_string()),
                     thread_id = get_current_thread_id(),
                     level = record.level(),
                     message = &record.args()
