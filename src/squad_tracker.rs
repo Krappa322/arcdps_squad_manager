@@ -1,9 +1,11 @@
 #![allow(non_snake_case)]
 
 use arcdps::{UserInfo, UserInfoIter, UserRole};
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+#[derive(Clone, Debug)]
 struct SquadMemberState {
     join_time: u64,
     role: UserRole,
@@ -31,6 +33,45 @@ impl SquadMemberState {
     }
 }
 
+fn handle_ready_status_changed(pReadyCheckStartedTime: &mut Option<Instant>, pExistingUser: &mut SquadMemberState, pNow: &Instant) {
+    match pExistingUser.role {
+        UserRole::SquadLeader => {
+            if pExistingUser.is_ready == true {
+                *pReadyCheckStartedTime = Some(*pNow);
+                info!("Ready check started at {:?}", pNow);
+            } else {
+                *pReadyCheckStartedTime = None;
+                info!(
+                    "Ready check which was started at {:?} was aborted at {:?}",
+                    pReadyCheckStartedTime, pNow
+                );
+            }
+        }
+        _ => {
+            if pExistingUser.is_ready == true {
+                match pReadyCheckStartedTime {
+                    Some(start_time) => {
+                        let time_spent = *pNow - *start_time;
+                        pExistingUser.ready_check_time_spent += time_spent;
+                        info!(
+                            "User {:?} readied up - they spent {:?} doing so",
+                            pExistingUser, time_spent
+                        )
+                    }
+                    None => {
+                        info!(
+                            "User {:?} readied up when there was no ready check active",
+                            pExistingUser
+                        )
+                    }
+                };
+            } else {
+                *pReadyCheckStartedTime = None;
+            }
+        }
+    };
+}
+
 pub struct SquadTracker {
     self_account_name: String,
     squad_members: HashMap<String, SquadMemberState>,
@@ -48,39 +89,66 @@ impl SquadTracker {
 
     pub fn squad_update(&mut self, pUsers: UserInfoIter) {
         let now = Instant::now();
-        for user in pUsers.into_iter() {
-            info!("{:?}", user);
 
-            let account_name = match user.account_name {
+        let SquadTracker{
+            self_account_name,
+            squad_members,
+            ready_check_started_time,
+        } = &mut *self;
+
+        for user_update in pUsers.into_iter() {
+            info!("{:?}", user_update);
+
+            let account_name = match user_update.account_name {
                 Some(x) => x,
                 None => continue,
             };
 
-            match user.role {
+            match user_update.role {
                 UserRole::SquadLeader | UserRole::Lieutenant | UserRole::Member => {
-                    // TODO: ready status here? How would it be handled if ready_status was true?
-                    let mut result = self.squad_members.insert(
-                        account_name.to_string(),
-                        SquadMemberState::new(
-                            user.join_time,
-                            user.role,
-                            user.subgroup,
-                            user.ready_status,
-                        ),
-                    );
-                    match &mut result {
-                        Some(existing_user) => {
-                            self.handle_user_update(existing_user, &user, &now);
-                        }
-                        None => info!("Added new player ({}) to the squad", account_name),
-                    };
+                    // Either insert a new entry or update the existing one. Returns a reference to the user state if
+                    // the ready check status updated (meaning further handling needs to be done to update fields)
+                    let new_user_state =
+                        match squad_members.entry(account_name.to_string()) {
+                            Entry::Occupied(entry) => {
+                                let user = entry.into_mut();
+                                let old_ready_status = user.is_ready;
+                                user.update_user(&user_update);
+
+                                if old_ready_status != user.is_ready {
+                                    Some(user)
+                                } else {
+                                    None
+                                }
+                            }
+                            Entry::Vacant(entry) => {
+                                info!("Adding new player ({:?}) to the squad", user_update);
+                                let user = entry.insert(SquadMemberState::new(
+                                    user_update.join_time,
+                                    user_update.role,
+                                    user_update.subgroup,
+                                    user_update.ready_status,
+                                ));
+
+                                if user_update.ready_status == true {
+                                    Some(user)
+                                } else {
+                                    None
+                                }
+                            }
+                        };
+
+
+                    if let Some(new_user_state) = new_user_state {
+                        handle_ready_status_changed(ready_check_started_time, new_user_state, &now);
+                    }
                 }
                 UserRole::None => {
-                    if account_name == self.self_account_name {
+                    if account_name == self_account_name {
                         info!("Self ({}) left - clearing squad", account_name);
-                        self.squad_members.clear();
+                        squad_members.clear();
                     } else {
-                        let result = self.squad_members.remove(account_name);
+                        let result = squad_members.remove(account_name);
                         if result.is_some() {
                             info!("Removed {} from the squad", account_name);
                         } else {
@@ -88,58 +156,8 @@ impl SquadTracker {
                         }
                     }
                 }
-                _ => {} // Ignore entry
+                UserRole::Invited | UserRole::Applied | UserRole::Invalid => {}
             };
         }
-    }
-
-    fn handle_user_update(
-        &mut self,
-        pExistingUser: &mut SquadMemberState,
-        pUpdate: &UserInfo,
-        pNow: &Instant,
-    ) {
-        if pExistingUser.is_ready != pUpdate.ready_status {
-            match pUpdate.role {
-                UserRole::SquadLeader => match pUpdate.ready_status {
-                    true => {
-                        self.ready_check_started_time = Some(*pNow);
-                        info!("Ready check started at {:?}", pNow);
-                    }
-                    false => {
-                        self.ready_check_started_time = None;
-                        info!(
-                            "Ready check which was started at {:?} was aborted at {:?}",
-                            self.ready_check_started_time, pNow
-                        );
-                    }
-                },
-                _ => match pUpdate.ready_status {
-                    true => {
-                        match self.ready_check_started_time {
-                            Some(start_time) => {
-                                let time_spent = *pNow - start_time;
-                                pExistingUser.ready_check_time_spent += time_spent;
-                                info!(
-                                    "User {:?} readied up - they spent {:?} doing so",
-                                    pUpdate, time_spent
-                                )
-                            }
-                            None => {
-                                info!(
-                                    "User {:?} readied up when there was no ready check active",
-                                    pUpdate
-                                )
-                            }
-                        };
-                    }
-                    false => {
-                        self.ready_check_started_time = None;
-                    }
-                },
-            }
-        }
-
-        pExistingUser.update_user(pUpdate);
     }
 }
