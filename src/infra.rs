@@ -121,7 +121,12 @@ lazy_static! {
 pub fn install_log_handler() -> Result<(), flexi_logger::FlexiLoggerError> {
     use flexi_logger::*;
 
-    *LOGGER.lock().unwrap() = Some(
+    let mut logger = LOGGER.lock().unwrap();
+    if logger.is_some() {
+        return Ok(()); // Return OK value in case logger is already initialized
+    }
+
+    *logger = Some(
         Logger::try_with_str("info")?
             .log_to_file(
                 FileSpec::default()

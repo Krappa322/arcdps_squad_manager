@@ -167,7 +167,11 @@ impl SquadTracker {
 #[cfg(test)]
 mod tests {
     use super::SquadTracker;
+    use crate::infra::install_log_handler;
     use arcdps::{RawUserInfo, UserInfoIter, UserRole};
+    use rstest::rstest;
+    use std::time::Duration;
+    use more_asserts::assert_gt;
     use std::mem::MaybeUninit;
 
     struct TestUser {
@@ -180,12 +184,13 @@ mod tests {
 
     impl TestUser {
         fn new(
-            account_name: String,
+            mut account_name: String,
             join_time: u64,
             role: UserRole,
             subgroup: u8,
             ready_status: bool,
         ) -> Self {
+            account_name.push('\0');
             Self {
                 account_name,
                 join_time,
@@ -233,12 +238,22 @@ mod tests {
         }
     }
 
+    // Test that when self leaves squad, all squad members are dereregistered
     #[test]
     fn deregister_self() {
+        install_log_handler().unwrap();
+
         let mut tracker = SquadTracker::new("self");
         let mut test_users = TestUserList::new();
         test_users.users.push(TestUser::new(
             "self".to_string(),
+            12345,
+            UserRole::Member,
+            0,
+            false,
+        ));
+        test_users.users.push(TestUser::new(
+            "peer1".to_string(),
             12345,
             UserRole::SquadLeader,
             0,
@@ -247,9 +262,169 @@ mod tests {
 
         unsafe {
             tracker.squad_update(test_users.get_iter());
-            assert_eq!(tracker.squad_members.len(), 1);
-
-            let x = tracker.squad_members.entry("self".to_string());
         }
+        assert_eq!(tracker.squad_members.len(), 2);
+        assert!(tracker.squad_members.contains_key(&"self".to_string()));
+        assert!(tracker.squad_members.contains_key(&"peer1".to_string()));
+
+        test_users.users.clear();
+        test_users.users.push(TestUser::new(
+            "self".to_string(),
+            12345,
+            UserRole::None,
+            0,
+            false,
+        ));
+        unsafe {
+            tracker.squad_update(test_users.get_iter());
+        }
+        assert_eq!(tracker.squad_members.len(), 0);
+    }
+
+    #[rstest]
+    #[case(false)]
+    #[case(true)]
+    fn ready_check(#[case] pAborted: bool) {
+        install_log_handler().unwrap();
+
+        let mut tracker = SquadTracker::new("self");
+        let mut test_users = TestUserList::new();
+
+        // Squad setup
+        test_users.users.push(TestUser::new(
+            "peer1".to_string(),
+            12345,
+            UserRole::SquadLeader,
+            0,
+            false,
+        ));
+        test_users.users.push(TestUser::new(
+            "self".to_string(),
+            12345,
+            UserRole::Member,
+            0,
+            false,
+        ));
+
+        unsafe {
+            tracker.squad_update(test_users.get_iter());
+        }
+        assert!(tracker.ready_check_started_time.is_none());
+        assert_eq!(tracker.squad_members.len(), 2);
+        assert_eq!(tracker.squad_members["peer1"].is_ready, false);
+        assert_eq!(tracker.squad_members["self"].is_ready, false);
+
+        // Ready check started
+        test_users.users.clear();
+        test_users.users.push(TestUser::new(
+            "peer1".to_string(),
+            12345,
+            UserRole::SquadLeader,
+            0,
+            true,
+        ));
+        unsafe {
+            tracker.squad_update(test_users.get_iter());
+        }
+        assert!(tracker.ready_check_started_time.is_some());
+        assert_eq!(tracker.squad_members.len(), 2);
+        assert_eq!(tracker.squad_members["peer1"].is_ready, true);
+        assert_eq!(tracker.squad_members["peer1"].ready_check_time_spent, Duration::new(0, 0));
+        assert_eq!(tracker.squad_members["self"].is_ready, false);
+        assert_eq!(tracker.squad_members["self"].ready_check_time_spent, Duration::new(0, 0));
+
+        if pAborted == false {
+            // Self readies up
+            test_users.users.clear();
+            test_users.users.push(TestUser::new(
+                "self".to_string(),
+                12345,
+                UserRole::Member,
+                0,
+                true,
+            ));
+            unsafe {
+                tracker.squad_update(test_users.get_iter());
+            }
+            assert!(tracker.ready_check_started_time.is_some());
+            assert_eq!(tracker.squad_members.len(), 2);
+            assert_eq!(tracker.squad_members["peer1"].is_ready, true);
+            assert_eq!(tracker.squad_members["peer1"].ready_check_time_spent, Duration::new(0, 0));
+            assert_eq!(tracker.squad_members["self"].is_ready, true);
+            assert_gt!(tracker.squad_members["self"].ready_check_time_spent, Duration::new(0, 0));
+        }
+
+        // Ready check finished. Ready check time spent should be incremented regardless of whether the ready check finished or not
+        test_users.users.clear();
+        test_users.users.push(TestUser::new(
+            "peer1".to_string(),
+            12345,
+            UserRole::SquadLeader,
+            0,
+            false,
+        ));
+        test_users.users.push(TestUser::new(
+            "self".to_string(),
+            12345,
+            UserRole::Member,
+            0,
+            false,
+        ));
+        unsafe {
+            tracker.squad_update(test_users.get_iter());
+        }
+        assert!(tracker.ready_check_started_time.is_none());
+        assert_eq!(tracker.squad_members.len(), 2);
+        assert_eq!(tracker.squad_members["peer1"].is_ready, false);
+        assert_eq!(tracker.squad_members["peer1"].ready_check_time_spent, Duration::new(0, 0));
+        assert_eq!(tracker.squad_members["self"].is_ready, false);
+        assert_gt!(tracker.squad_members["self"].ready_check_time_spent, Duration::new(0, 0));
+
+        // Perform another ready check and assert that time spent increments
+        let old_ready_check_time_spent = tracker.squad_members["self"].ready_check_time_spent;
+        test_users.users.clear();
+        test_users.users.push(TestUser::new(
+            "peer1".to_string(),
+            12345,
+            UserRole::SquadLeader,
+            0,
+            true,
+        ));
+        unsafe {
+            tracker.squad_update(test_users.get_iter());
+        }
+        assert!(tracker.ready_check_started_time.is_some());
+
+        test_users.users.clear();
+        test_users.users.push(TestUser::new(
+            "self".to_string(),
+            12345,
+            UserRole::Member,
+            0,
+            true,
+        ));
+        test_users.users.push(TestUser::new(
+            "peer1".to_string(),
+            12345,
+            UserRole::SquadLeader,
+            0,
+            false,
+        ));
+        test_users.users.push(TestUser::new(
+            "self".to_string(),
+            12345,
+            UserRole::Member,
+            0,
+            false,
+        ));
+        unsafe {
+            tracker.squad_update(test_users.get_iter());
+        }
+        assert!(tracker.ready_check_started_time.is_none());
+        assert_eq!(tracker.squad_members.len(), 2);
+        assert_eq!(tracker.squad_members["peer1"].is_ready, false);
+        assert_eq!(tracker.squad_members["peer1"].ready_check_time_spent, Duration::new(0, 0));
+        assert_eq!(tracker.squad_members["self"].is_ready, false);
+        assert_gt!(tracker.squad_members["self"].ready_check_time_spent, old_ready_check_time_spent);
     }
 }
