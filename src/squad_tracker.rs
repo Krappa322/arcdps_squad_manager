@@ -33,7 +33,11 @@ impl SquadMemberState {
     }
 }
 
-fn handle_ready_status_changed(pReadyCheckStartedTime: &mut Option<Instant>, pExistingUser: &mut SquadMemberState, pNow: &Instant) {
+fn handle_ready_status_changed(
+    pReadyCheckStartedTime: &mut Option<Instant>,
+    pExistingUser: &mut SquadMemberState,
+    pNow: &Instant,
+) {
     match pExistingUser.role {
         UserRole::SquadLeader => {
             if pExistingUser.is_ready == true {
@@ -90,7 +94,7 @@ impl SquadTracker {
     pub fn squad_update(&mut self, pUsers: UserInfoIter) {
         let now = Instant::now();
 
-        let SquadTracker{
+        let SquadTracker {
             self_account_name,
             squad_members,
             ready_check_started_time,
@@ -108,36 +112,34 @@ impl SquadTracker {
                 UserRole::SquadLeader | UserRole::Lieutenant | UserRole::Member => {
                     // Either insert a new entry or update the existing one. Returns a reference to the user state if
                     // the ready check status updated (meaning further handling needs to be done to update fields)
-                    let new_user_state =
-                        match squad_members.entry(account_name.to_string()) {
-                            Entry::Occupied(entry) => {
-                                let user = entry.into_mut();
-                                let old_ready_status = user.is_ready;
-                                user.update_user(&user_update);
+                    let new_user_state = match squad_members.entry(account_name.to_string()) {
+                        Entry::Occupied(entry) => {
+                            let user = entry.into_mut();
+                            let old_ready_status = user.is_ready;
+                            user.update_user(&user_update);
 
-                                if old_ready_status != user.is_ready {
-                                    Some(user)
-                                } else {
-                                    None
-                                }
+                            if old_ready_status != user.is_ready {
+                                Some(user)
+                            } else {
+                                None
                             }
-                            Entry::Vacant(entry) => {
-                                info!("Adding new player ({:?}) to the squad", user_update);
-                                let user = entry.insert(SquadMemberState::new(
-                                    user_update.join_time,
-                                    user_update.role,
-                                    user_update.subgroup,
-                                    user_update.ready_status,
-                                ));
+                        }
+                        Entry::Vacant(entry) => {
+                            info!("Adding new player ({:?}) to the squad", user_update);
+                            let user = entry.insert(SquadMemberState::new(
+                                user_update.join_time,
+                                user_update.role,
+                                user_update.subgroup,
+                                user_update.ready_status,
+                            ));
 
-                                if user_update.ready_status == true {
-                                    Some(user)
-                                } else {
-                                    None
-                                }
+                            if user_update.ready_status == true {
+                                Some(user)
+                            } else {
+                                None
                             }
-                        };
-
+                        }
+                    };
 
                     if let Some(new_user_state) = new_user_state {
                         handle_ready_status_changed(ready_check_started_time, new_user_state, &now);
@@ -158,6 +160,96 @@ impl SquadTracker {
                 }
                 UserRole::Invited | UserRole::Applied | UserRole::Invalid => {}
             };
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SquadTracker;
+    use arcdps::{RawUserInfo, UserInfoIter, UserRole};
+    use std::mem::MaybeUninit;
+
+    struct TestUser {
+        account_name: String,
+        join_time: u64,
+        role: UserRole,
+        subgroup: u8,
+        ready_status: bool,
+    }
+
+    impl TestUser {
+        fn new(
+            account_name: String,
+            join_time: u64,
+            role: UserRole,
+            subgroup: u8,
+            ready_status: bool,
+        ) -> Self {
+            Self {
+                account_name,
+                join_time,
+                role,
+                subgroup,
+                ready_status,
+            }
+        }
+
+        unsafe fn to_raw_user(&self) -> RawUserInfo {
+            let mut result = MaybeUninit::<RawUserInfo>::zeroed().assume_init();
+            result.account_name = self.account_name.as_ptr();
+            result.join_time = self.join_time;
+            result.role = self.role;
+            result.subgroup = self.subgroup;
+            result.ready_status = self.ready_status;
+
+            result
+        }
+    }
+
+    struct TestUserList {
+        users: Vec<TestUser>,
+        current_iterator: Vec<RawUserInfo>,
+    }
+
+    impl TestUserList {
+        fn new() -> Self {
+            Self {
+                users: Vec::new(),
+                current_iterator: Vec::new(),
+            }
+        }
+
+        unsafe fn get_iter(&mut self) -> UserInfoIter {
+            self.current_iterator = self
+                .users
+                .iter()
+                .map(|x| x.to_raw_user())
+                .collect::<Vec<RawUserInfo>>();
+
+            self.current_iterator
+                .iter()
+                .map(::arcdps::helpers::convert_extras_user as ::arcdps::UserConvert)
+        }
+    }
+
+    #[test]
+    fn deregister_self() {
+        let mut tracker = SquadTracker::new("self");
+        let mut test_users = TestUserList::new();
+        test_users.users.push(TestUser::new(
+            "self".to_string(),
+            12345,
+            UserRole::SquadLeader,
+            0,
+            false,
+        ));
+
+        unsafe {
+            tracker.squad_update(test_users.get_iter());
+            assert_eq!(tracker.squad_members.len(), 1);
+
+            let x = tracker.squad_members.entry("self".to_string());
         }
     }
 }
