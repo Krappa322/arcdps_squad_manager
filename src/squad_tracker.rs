@@ -59,34 +59,31 @@ fn handle_ready_status_changed(
                 *pReadyCheckStartedTime = None;
             }
         }
-        _ => {
-            if pExistingUser.is_ready == true {
-                match pReadyCheckStartedTime {
-                    Some(start_time) => {
-                        pExistingUser.current_ready_check_time = Some(*pNow - *start_time);
-                        info!(
-                            "User {:?} readied up - they spent {:?} doing so",
-                            pExistingUser, pExistingUser.current_ready_check_time
-                        )
-                    }
-                    None => {
-                        info!(
-                            "User {:?} readied up when there was no ready check active",
-                            pExistingUser
-                        )
-                    }
-                };
-            } else {
-                if let Some(time_spent) = pExistingUser.current_ready_check_time {
-                    info!(
-                        "User {:?} unreadied - current_ready_check_time={:?}",
-                        pExistingUser, time_spent
-                    )
-                }
-                pExistingUser.current_ready_check_time = None;
-            }
+        _ => {}
+    }
+
+    if pExistingUser.is_ready == true {
+        if let Some(start_time) = pReadyCheckStartedTime {
+            pExistingUser.current_ready_check_time = Some(*pNow - *start_time);
+            info!(
+                "User {:?} readied up - they spent {:?} doing so",
+                pExistingUser, pExistingUser.current_ready_check_time
+            )
+        } else {
+            info!(
+                "User {:?} readied up when there was no ready check active",
+                pExistingUser
+            )
         }
-    };
+    } else if ready_check_duration.is_none() { // User can't unready if ready check is finished
+        if let Some(time_spent) = pExistingUser.current_ready_check_time {
+            info!(
+                "User {:?} unreadied - current_ready_check_time={:?}",
+                pExistingUser, time_spent
+            )
+        }
+        pExistingUser.current_ready_check_time = None;
+    }
 
     ready_check_duration
 }
@@ -95,7 +92,11 @@ fn handle_ready_check_completed(
     pSquadMembers: &mut HashMap<String, SquadMemberState>,
     pReadyCheckDuration: Duration,
 ) {
-    dbg!("handle_ready_check_completed {:?} {:?}", &pSquadMembers, pReadyCheckDuration);
+    info!(
+        "handle_ready_check_completed {:?} {:?}",
+        &pSquadMembers,
+        pReadyCheckDuration
+    );
 
     for (_account_name, state) in pSquadMembers {
         let time_spent = state
@@ -305,7 +306,9 @@ mod tests {
         }
         assert_eq!(tracker.squad_members.len(), 2);
         assert!(tracker.squad_members.contains_key(&"self".to_string()));
-        assert!(tracker.squad_members.contains_key(&"squad_leader".to_string()));
+        assert!(tracker
+            .squad_members
+            .contains_key(&"squad_leader".to_string()));
 
         test_users.users.clear();
         test_users.users.push(TestUser::new(
@@ -369,9 +372,10 @@ mod tests {
         assert!(tracker.ready_check_started_time.is_some());
         assert_eq!(tracker.squad_members.len(), 2);
         assert_eq!(tracker.squad_members["squad_leader"].is_ready, true);
-        assert!(tracker.squad_members["squad_leader"]
-            .current_ready_check_time
-            .is_none());
+        assert_eq!(
+            tracker.squad_members["squad_leader"].current_ready_check_time,
+            Some(Duration::new(0, 0))
+        );
         assert_eq!(
             tracker.squad_members["squad_leader"].total_ready_check_time,
             Duration::new(0, 0)
