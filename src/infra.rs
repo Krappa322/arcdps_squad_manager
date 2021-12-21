@@ -16,52 +16,67 @@ use winapi::um::winbase::CreateFileMappingA;
 use winapi::um::winnt::PAGE_READWRITE;
 
 #[macro_export]
+macro_rules! function_name_no_crate {
+    () => {{
+        fn f() {}
+        fn type_name_of<T>(_: T) -> &'static str {
+            std::any::type_name::<T>()
+        }
+        let raw_name = type_name_of(f);
+        let crate_name_end_index = raw_name.find(':').unwrap();
+        // 2 is the length of "::" delimiting the crate name and the function name start
+        // 3 is the length of "::f"
+        &raw_name[crate_name_end_index + 2 .. raw_name.len() - 3]
+    }};
+}
+
+#[macro_export]
 macro_rules! trace {
     ($fmtstring:tt, $($arg:tt)*) => (
-        log::trace!(std::concat!("{}|", $fmtstring), stdext::function_name!(), $($arg)*)
+        log::trace!(std::concat!("{}|", $fmtstring), function_name_no_crate!(), $($arg)*)
     );
     ($fmtstring:tt) => (
-        log::trace!(std::concat!("{}|", $fmtstring), stdext::function_name!())
+        log::trace!(std::concat!("{}|", $fmtstring), function_name_no_crate!())
     )
 }
 
 #[macro_export]
 macro_rules! debug {
     ($fmtstring:tt, $($arg:tt)*) => (
-        log::debug!(std::concat!("{}|", $fmtstring), stdext::function_name!(), $($arg)*)
+        log::debug!(std::concat!("{}|", $fmtstring), function_name_no_crate!(), $($arg)*)
     );
     ($fmtstring:tt) => (
-        log::debug!(std::concat!("{}|", $fmtstring), stdext::function_name!())
+        log::debug!(std::concat!("{}|", $fmtstring), function_name_no_crate!())
     )
 }
 
 #[macro_export]
 macro_rules! info {
     ($fmtstring:tt, $($arg:tt)*) => (
-        log::info!(std::concat!("{}|", $fmtstring), stdext::function_name!(), $($arg)*)
+        log::info!(std::concat!("{}|", $fmtstring), function_name_no_crate!(), $($arg)*)
     );
     ($fmtstring:tt) => (
-        log::info!(std::concat!("{}|", $fmtstring), stdext::function_name!())
+        log::info!(std::concat!("{}|", $fmtstring), function_name_no_crate!())
     )
 }
 
 #[macro_export]
 macro_rules! warn {
     ($fmtstring:tt, $($arg:tt)*) => (
-        log::warn!(std::concat!("{}|", $fmtstring), stdext::function_name!(), $($arg)*)
+        log::warn!(std::concat!("{}|", $fmtstring), function_name_no_crate!(), $($arg)*)
     );
     ($fmtstring:tt) => (
-        log::warn!(std::concat!("{}|", $fmtstring), stdext::function_name!())
+        log::warn!(std::concat!("{}|", $fmtstring), function_name_no_crate!())
     )
 }
 
 #[macro_export]
 macro_rules! error {
     ($fmtstring:tt, $($arg:tt)*) => (
-        log::error!(std::concat!("{}|", $fmtstring), stdext::function_name!(), $($arg)*)
+        log::error!(std::concat!("{}|", $fmtstring), function_name_no_crate!(), $($arg)*)
     );
     ($fmtstring:tt) => (
-        log::error!(std::concat!("{}|", $fmtstring), stdext::function_name!())
+        log::error!(std::concat!("{}|", $fmtstring), function_name_no_crate!())
     )
 }
 

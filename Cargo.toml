@@ -15,7 +15,6 @@ flexi_logger = { version = "0.19", default_features = false, features = ["async"
 backtrace = "0.3"
 arcdps = { git = "https://github.com/greaka/arcdps_bindings.git", default-features = false } # `default-features = false` turns off logging through arcdps log
 winapi = { version = "0.3", features = ["consoleapi", "dbghelp", "memoryapi", "psapi"] }
-stdext = "0.3"
 chrono = "0.4"
 time = { version = "0.3", features = ["formatting", "macros"] }
 static_init = "1.0"
