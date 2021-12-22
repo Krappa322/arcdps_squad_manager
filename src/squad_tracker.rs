@@ -6,13 +6,13 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug)]
-struct SquadMemberState {
-    join_time: u64,
-    role: UserRole,
-    subgroup: u8,
-    is_ready: bool,
-    current_ready_check_time: Option<Duration>,
-    total_ready_check_time: Duration,
+pub struct SquadMemberState {
+    pub join_time: u64,
+    pub role: UserRole,
+    pub subgroup: u8,
+    pub is_ready: bool,
+    pub current_ready_check_time: Option<Duration>,
+    pub total_ready_check_time: Duration,
 }
 
 impl SquadMemberState {
@@ -202,6 +202,10 @@ impl SquadTracker {
                 UserRole::Invited | UserRole::Applied | UserRole::Invalid => {}
             };
         }
+    }
+
+    pub fn get_squad_members(&self) -> &HashMap<String, SquadMemberState> {
+        &self.squad_members
     }
 }
 

@@ -3,10 +3,12 @@
 
 #[macro_use]
 mod infra;
+mod gui;
 mod squad_tracker;
 
 use arcdps::arcdps_export;
 use arcdps::UserInfoIter;
+use arcdps::imgui;
 use infra::*;
 use squad_tracker::SquadTracker;
 use static_init::dynamic;
@@ -15,6 +17,7 @@ use winapi::um::consoleapi;
 arcdps_export! {
     name: "Squad Manager",
     sig: 0x88ef8f68u32,
+    imgui: imgui,
     init: init,
     release: release,
     unofficial_extras_init: unofficial_extras_init,
@@ -61,4 +64,14 @@ fn init() {
 
 fn release() {
     info!("release");
+}
+
+fn imgui(pUi: &imgui::Ui, pNotChararacterSelectOrLoading: bool) {
+    if pNotChararacterSelectOrLoading == false {
+        return;
+    }
+
+    if let Some(tracker) = SQUAD_TRACKER.read().as_ref() {
+        gui::draw(pUi, tracker);
+    }
 }
