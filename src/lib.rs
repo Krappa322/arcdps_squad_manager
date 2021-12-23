@@ -13,10 +13,12 @@ use infra::*;
 use squad_tracker::SquadTracker;
 use static_init::dynamic;
 use winapi::um::consoleapi;
+use gui::GuiState;
 
 arcdps_export! {
     name: "Squad Manager",
     sig: 0x88ef8f68u32,
+    options_windows: options_windows,
     imgui: imgui,
     init: init,
     release: release,
@@ -26,6 +28,9 @@ arcdps_export! {
 
 #[dynamic]
 static mut SQUAD_TRACKER: Option<SquadTracker> = None;
+
+#[dynamic]
+static mut GUI_STATE: Option<GuiState> = None;
 
 fn unofficial_extras_init(
     pSelfAccountName: Option<&str>,
@@ -71,7 +76,21 @@ fn imgui(pUi: &imgui::Ui, pNotChararacterSelectOrLoading: bool) {
         return;
     }
 
+    let mut state = GUI_STATE.write();
+    let state = state.get_or_insert(GuiState::new());
+
     if let Some(tracker) = SQUAD_TRACKER.read().as_ref() {
-        gui::draw(pUi, tracker);
+        gui::draw(pUi, state, tracker);
     }
+}
+
+fn options_windows(pUi: &imgui::Ui, pWindowName: Option<&str>) -> bool {
+    if pWindowName.is_none() {
+        let mut state = GUI_STATE.write();
+        let state = state.get_or_insert(GuiState::new());
+
+        gui::draw_options(pUi, state);
+    }
+
+    return false;
 }
