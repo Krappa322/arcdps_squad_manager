@@ -20,7 +20,7 @@ checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 [[package]]
 name = "arcdps"
 version = "0.6.1"
-source = "git+https://github.com/greaka/arcdps_bindings.git#f34cf1841d37a29811f2e2e262cf23e1a6af0793"
+source = "git+https://github.com/Krappa322/arcdps_bindings.git#650a10512a7c0ea870c0fd10899ebe116877f5d4"
 dependencies = [
  "arcdps_codegen",
  "imgui",
@@ -30,7 +30,7 @@ dependencies = [
 [[package]]
 name = "arcdps_codegen"
 version = "0.1.1"
-source = "git+https://github.com/greaka/arcdps_bindings.git#f34cf1841d37a29811f2e2e262cf23e1a6af0793"
+source = "git+https://github.com/Krappa322/arcdps_bindings.git#650a10512a7c0ea870c0fd10899ebe116877f5d4"
 dependencies = [
  "paste",
  "proc-macro2",

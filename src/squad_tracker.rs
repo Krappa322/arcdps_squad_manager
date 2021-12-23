@@ -5,7 +5,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SquadMemberState {
     pub join_time: u64,
     pub role: UserRole,
@@ -35,13 +35,14 @@ impl SquadMemberState {
     }
 }
 
-// Returns the time spent in ready check if a ready check was completed
+// Returns true if ready check was aborted
 fn handle_ready_status_changed(
     pReadyCheckStartedTime: &mut Option<Instant>,
     pExistingUser: &mut SquadMemberState,
+    pReadyPlayers: &mut usize,
     pNow: &Instant,
-) -> Option<Duration> {
-    let mut ready_check_duration: Option<Duration> = None;
+) -> bool {
+    let mut ready_check_aborted = false;
 
     match pExistingUser.role {
         UserRole::SquadLeader => {
@@ -53,10 +54,8 @@ fn handle_ready_status_changed(
                     "Ready check which was started at {:?} was aborted at {:?}",
                     pReadyCheckStartedTime, pNow
                 );
-                if let Some(start_time) = pReadyCheckStartedTime {
-                    ready_check_duration = Some(*pNow - *start_time);
-                }
-                *pReadyCheckStartedTime = None;
+
+                ready_check_aborted = true;
             }
         }
         _ => {}
@@ -75,7 +74,9 @@ fn handle_ready_status_changed(
                 pExistingUser
             )
         }
-    } else if ready_check_duration.is_none() { // User can't unready if ready check is finished
+        *pReadyPlayers += 1;
+    } else if ready_check_aborted == true {
+        // User can't unready if ready check is finished
         if let Some(time_spent) = pExistingUser.current_ready_check_time {
             info!(
                 "User {:?} unreadied - current_ready_check_time={:?}",
@@ -83,35 +84,46 @@ fn handle_ready_status_changed(
             )
         }
         pExistingUser.current_ready_check_time = None;
+        *pReadyPlayers -= 1;
     }
 
-    ready_check_duration
+    ready_check_aborted
 }
 
-fn handle_ready_check_completed(
+// pSuccessful indicates whether the ready check was finished because everyone readied up (true) or because it was
+// aborted (false)
+fn handle_ready_check_finished(
+    pReadyCheckStartedTime: &mut Option<Instant>,
     pSquadMembers: &mut HashMap<String, SquadMemberState>,
+    pReadyPlayers: &mut usize,
     pReadyCheckDuration: Duration,
+    pSuccessful: bool,
 ) {
-    info!(
-        "handle_ready_check_completed {:?} {:?}",
-        &pSquadMembers,
-        pReadyCheckDuration
-    );
+    info!("{:?} {:?}", &pSquadMembers, pReadyCheckDuration);
 
     for (_account_name, state) in pSquadMembers {
-        let time_spent = state
-            .current_ready_check_time
-            .unwrap_or(pReadyCheckDuration);
+        if pSuccessful == true {
+            if let Some(time_spent) = state.current_ready_check_time {
+                state.total_ready_check_time += time_spent;
+            } else {
+                error!("Ready check completed when {:?} wasn't ready", state);
+                debug_assert!(false);
+            }
+        }
 
-        state.total_ready_check_time += time_spent;
         state.current_ready_check_time = None;
+        state.is_ready = false;
     }
+
+    *pReadyPlayers = 0;
+    *pReadyCheckStartedTime = None;
 }
 
 pub struct SquadTracker {
     self_account_name: String,
     squad_members: HashMap<String, SquadMemberState>,
     ready_check_started_time: Option<Instant>,
+    ready_players: usize,
 }
 
 impl SquadTracker {
@@ -120,6 +132,7 @@ impl SquadTracker {
             self_account_name: String::from(self_account_name),
             squad_members: HashMap::new(),
             ready_check_started_time: None,
+            ready_players: 0,
         }
     }
 
@@ -130,6 +143,7 @@ impl SquadTracker {
             self_account_name,
             squad_members,
             ready_check_started_time,
+            ready_players,
         } = &mut *self;
 
         for user_update in pUsers.into_iter() {
@@ -173,17 +187,35 @@ impl SquadTracker {
                         }
                     };
 
-                    let mut ready_check_duration: Option<Duration> = None;
+                    let mut ready_check_aborted = false;
                     if let Some(new_user_state) = new_user_state {
-                        ready_check_duration = handle_ready_status_changed(
+                        ready_check_aborted = handle_ready_status_changed(
                             ready_check_started_time,
                             new_user_state,
+                            ready_players,
                             &now,
                         );
                     }
 
-                    if let Some(ready_check_duration) = ready_check_duration {
-                        handle_ready_check_completed(squad_members, ready_check_duration);
+                    if let Some(start_time) = ready_check_started_time {
+                        let ready_check_duration = now - *start_time;
+                        let successful: Option<bool> = if ready_check_aborted == true {
+                            Some(false)
+                        } else if *ready_players == squad_members.len() {
+                            Some(true)
+                        } else {
+                            None
+                        };
+
+                        if let Some(successful) = successful {
+                            handle_ready_check_finished(
+                                ready_check_started_time,
+                                squad_members,
+                                ready_players,
+                                ready_check_duration,
+                                successful,
+                            );
+                        }
                     }
                 }
                 UserRole::None => {
@@ -352,14 +384,29 @@ mod tests {
             0,
             false,
         ));
+        test_users.users.push(TestUser::new(
+            "peer".to_string(),
+            12345,
+            UserRole::Member,
+            0,
+            false,
+        ));
 
         unsafe {
             tracker.squad_update(test_users.get_iter());
         }
         assert!(tracker.ready_check_started_time.is_none());
-        assert_eq!(tracker.squad_members.len(), 2);
+        assert_eq!(tracker.squad_members.len(), 3);
         assert_eq!(tracker.squad_members["squad_leader"].is_ready, false);
         assert_eq!(tracker.squad_members["self"].is_ready, false);
+        assert_eq!(tracker.squad_members["peer"].is_ready, false);
+
+        let initial_ready_check_time_spent = Duration::new(5, 0);
+        for user in ["self", "peer", "squad_leader"] {
+            tracker.squad_members.get_mut(user).unwrap().total_ready_check_time = initial_ready_check_time_spent;
+        }
+
+        let mut expected_state_after_ready_check = tracker.squad_members.clone();
 
         // Ready check started
         test_users.users.clear();
@@ -374,7 +421,7 @@ mod tests {
             tracker.squad_update(test_users.get_iter());
         }
         assert!(tracker.ready_check_started_time.is_some());
-        assert_eq!(tracker.squad_members.len(), 2);
+        assert_eq!(tracker.squad_members.len(), 3);
         assert_eq!(tracker.squad_members["squad_leader"].is_ready, true);
         assert_eq!(
             tracker.squad_members["squad_leader"].current_ready_check_time,
@@ -382,7 +429,41 @@ mod tests {
         );
         assert_eq!(
             tracker.squad_members["squad_leader"].total_ready_check_time,
-            Duration::new(0, 0)
+            initial_ready_check_time_spent
+        );
+        for user in ["self", "peer"] {
+            assert_eq!(tracker.squad_members[user].is_ready, false);
+            assert!(tracker.squad_members[user]
+                .current_ready_check_time
+                .is_none());
+            assert_eq!(
+                tracker.squad_members[user].total_ready_check_time,
+                initial_ready_check_time_spent
+            );
+        }
+
+        // Peer readies up
+        test_users.users.clear();
+        test_users.users.push(TestUser::new(
+            "peer".to_string(),
+            12345,
+            UserRole::Member,
+            0,
+            true,
+        ));
+        unsafe {
+            tracker.squad_update(test_users.get_iter());
+        }
+        assert!(tracker.ready_check_started_time.is_some());
+        assert_eq!(tracker.squad_members.len(), 3);
+        assert_eq!(tracker.squad_members["squad_leader"].is_ready, true);
+        assert_eq!(
+            tracker.squad_members["squad_leader"].current_ready_check_time,
+            Some(Duration::new(0, 0))
+        );
+        assert_eq!(
+            tracker.squad_members["squad_leader"].total_ready_check_time,
+            initial_ready_check_time_spent
         );
         assert_eq!(tracker.squad_members["self"].is_ready, false);
         assert!(tracker.squad_members["self"]
@@ -390,11 +471,20 @@ mod tests {
             .is_none());
         assert_eq!(
             tracker.squad_members["self"].total_ready_check_time,
-            Duration::new(0, 0)
+            initial_ready_check_time_spent
+        );
+        assert_eq!(tracker.squad_members["peer"].is_ready, true);
+        assert_gt!(
+            tracker.squad_members["peer"].current_ready_check_time,
+            Some(Duration::new(0, 0))
+        );
+        assert_eq!(
+            tracker.squad_members["peer"].total_ready_check_time,
+            initial_ready_check_time_spent
         );
 
         if pAborted == false {
-            // Self readies up
+            // Self readies up - this finishes the ready check
             test_users.users.clear();
             test_users.users.push(TestUser::new(
                 "self".to_string(),
@@ -406,118 +496,53 @@ mod tests {
             unsafe {
                 tracker.squad_update(test_users.get_iter());
             }
-            assert!(tracker.ready_check_started_time.is_some());
-            assert_eq!(tracker.squad_members.len(), 2);
-            assert_eq!(tracker.squad_members["squad_leader"].is_ready, true);
-            assert_eq!(
-                tracker.squad_members["squad_leader"].current_ready_check_time,
-                Some(Duration::new(0, 0))
+            assert!(tracker.ready_check_started_time.is_none());
+            assert_eq!(tracker.squad_members.len(), 3);
+            for user in ["self", "peer", "squad_leader"] {
+                assert_eq!(tracker.squad_members[user].is_ready, false);
+                assert!(tracker.squad_members[user]
+                    .current_ready_check_time
+                    .is_none());
+            }
+            assert_gt!(
+                tracker.squad_members["peer"].total_ready_check_time,
+                initial_ready_check_time_spent
+            );
+            assert_gt!(
+                tracker.squad_members["self"].total_ready_check_time,
+                tracker.squad_members["peer"].total_ready_check_time
             );
             assert_eq!(
                 tracker.squad_members["squad_leader"].total_ready_check_time,
-                Duration::new(0, 0)
+                initial_ready_check_time_spent
             );
-            assert_eq!(tracker.squad_members["self"].is_ready, true);
-            assert_gt!(
-                tracker.squad_members["self"].current_ready_check_time,
-                Some(Duration::new(0, 0))
-            );
-            assert_eq!(
-                tracker.squad_members["self"].total_ready_check_time,
-                Duration::new(0, 0)
-            );
+
+            expected_state_after_ready_check = tracker.squad_members.clone();
         }
 
-        // Ready check finished. Ready check time spent should be incremented regardless of whether the ready check
-        // finished successfully or not
-        test_users.users.clear();
-        test_users.users.push(TestUser::new(
-            "squad_leader".to_string(),
-            12345,
-            UserRole::SquadLeader,
-            0,
-            false,
-        ));
-        test_users.users.push(TestUser::new(
-            "self".to_string(),
-            12345,
-            UserRole::Member,
-            0,
-            false,
-        ));
-        unsafe {
-            tracker.squad_update(test_users.get_iter());
+        // Ready check finished. Players unready in "random" order. If aborted, the state should not have changed from
+        // before the ready check was started
+        for user in ["self", "squad_leader", "peer"] {
+            test_users.users.clear();
+            let role = if user == "squad_leader" {
+                UserRole::SquadLeader
+            } else {
+                UserRole::Member
+            };
+            test_users.users.push(TestUser::new(
+                user.to_string(),
+                12345,
+                role,
+                0,
+                false,
+            ));
+            unsafe {
+                tracker.squad_update(test_users.get_iter());
+            }
+            if pAborted == false {
+                assert_eq!(tracker.squad_members, expected_state_after_ready_check);
+            }
         }
-        assert!(tracker.ready_check_started_time.is_none());
-        assert_eq!(tracker.squad_members.len(), 2);
-        assert_eq!(tracker.squad_members["squad_leader"].is_ready, false);
-        assert!(tracker.squad_members["squad_leader"]
-            .current_ready_check_time
-            .is_none());
-        assert_eq!(
-            tracker.squad_members["squad_leader"].total_ready_check_time,
-            Duration::new(0, 0)
-        );
-        assert_eq!(tracker.squad_members["self"].is_ready, false);
-        assert!(tracker.squad_members["self"]
-            .current_ready_check_time
-            .is_none());
-        assert_gt!(
-            tracker.squad_members["self"].total_ready_check_time,
-            Duration::new(0, 0)
-        );
-
-        // Perform another ready check and assert that time spent increments
-        let old_ready_check_time_spent = tracker.squad_members["self"].total_ready_check_time;
-        test_users.users.clear();
-        test_users.users.push(TestUser::new(
-            "squad_leader".to_string(),
-            12345,
-            UserRole::SquadLeader,
-            0,
-            true,
-        ));
-        unsafe {
-            tracker.squad_update(test_users.get_iter());
-        }
-        assert!(tracker.ready_check_started_time.is_some());
-
-        test_users.users.clear();
-        test_users.users.push(TestUser::new(
-            "self".to_string(),
-            12345,
-            UserRole::Member,
-            0,
-            true,
-        ));
-        test_users.users.push(TestUser::new(
-            "squad_leader".to_string(),
-            12345,
-            UserRole::SquadLeader,
-            0,
-            false,
-        ));
-        test_users.users.push(TestUser::new(
-            "self".to_string(),
-            12345,
-            UserRole::Member,
-            0,
-            false,
-        ));
-        unsafe {
-            tracker.squad_update(test_users.get_iter());
-        }
-        assert!(tracker.ready_check_started_time.is_none());
-        assert_eq!(tracker.squad_members.len(), 2);
-        assert_eq!(tracker.squad_members["squad_leader"].is_ready, false);
-        assert_eq!(
-            tracker.squad_members["squad_leader"].total_ready_check_time,
-            Duration::new(0, 0)
-        );
-        assert_eq!(tracker.squad_members["self"].is_ready, false);
-        assert_gt!(
-            tracker.squad_members["self"].total_ready_check_time,
-            old_ready_check_time_spent
-        );
+        assert_eq!(tracker.squad_members, expected_state_after_ready_check);
     }
 }
