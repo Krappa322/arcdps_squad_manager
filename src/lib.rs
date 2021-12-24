@@ -3,6 +3,7 @@
 
 #[macro_use]
 mod infra;
+mod imgui_ex;
 mod gui;
 mod squad_tracker;
 
