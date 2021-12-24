@@ -244,14 +244,38 @@ impl SquadTracker {
         assert_eq!(self.squad_members, HashMap::new());
         self.ready_players = 2;
         self.ready_check_started_time = Some(Instant::now() - Duration::new(15, 0));
-        self.squad_members.insert("Alice".to_string(), SquadMemberState::new(100, UserRole::Member, 0, false));
-        self.squad_members.get_mut("Alice").unwrap().total_ready_check_time = Duration::new(300, 0);
-        self.squad_members.insert("Bob".to_string(), SquadMemberState::new(100, UserRole::SquadLeader, 0, true));
-        self.squad_members.get_mut("Bob").unwrap().current_ready_check_time = Some(Duration::new(0, 0));
-        self.squad_members.get_mut("Bob").unwrap().total_ready_check_time = Duration::new(200, 0);
-        self.squad_members.insert("Charlie".to_string(), SquadMemberState::new(100, UserRole::Member, 0, true));
-        self.squad_members.get_mut("Charlie").unwrap().current_ready_check_time = Some(Duration::new(10, 0));
-        self.squad_members.get_mut("Charlie").unwrap().total_ready_check_time = Duration::new(100, 0);
+        self.squad_members.insert(
+            "Alice".to_string(),
+            SquadMemberState::new(100, UserRole::Member, 0, false),
+        );
+        self.squad_members
+            .get_mut("Alice")
+            .unwrap()
+            .total_ready_check_time = Duration::new(100, 0);
+        self.squad_members.insert(
+            "Bob".to_string(),
+            SquadMemberState::new(100, UserRole::SquadLeader, 0, true),
+        );
+        self.squad_members
+            .get_mut("Bob")
+            .unwrap()
+            .current_ready_check_time = Some(Duration::new(0, 0));
+        self.squad_members
+            .get_mut("Bob")
+            .unwrap()
+            .total_ready_check_time = Duration::new(200, 0);
+        self.squad_members.insert(
+            "Charlie".to_string(),
+            SquadMemberState::new(100, UserRole::Member, 0, true),
+        );
+        self.squad_members
+            .get_mut("Charlie")
+            .unwrap()
+            .current_ready_check_time = Some(Duration::new(10, 0));
+        self.squad_members
+            .get_mut("Charlie")
+            .unwrap()
+            .total_ready_check_time = Duration::new(100, 0);
     }
 }
 
@@ -417,7 +441,11 @@ mod tests {
 
         let initial_ready_check_time_spent = Duration::new(5, 0);
         for user in ["self", "peer", "squad_leader"] {
-            tracker.squad_members.get_mut(user).unwrap().total_ready_check_time = initial_ready_check_time_spent;
+            tracker
+                .squad_members
+                .get_mut(user)
+                .unwrap()
+                .total_ready_check_time = initial_ready_check_time_spent;
         }
 
         let mut expected_state_after_ready_check = tracker.squad_members.clone();
@@ -543,13 +571,9 @@ mod tests {
             } else {
                 UserRole::Member
             };
-            test_users.users.push(TestUser::new(
-                user.to_string(),
-                12345,
-                role,
-                0,
-                false,
-            ));
+            test_users
+                .users
+                .push(TestUser::new(user.to_string(), 12345, role, 0, false));
             unsafe {
                 tracker.squad_update(test_users.get_iter());
             }

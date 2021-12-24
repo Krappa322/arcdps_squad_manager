@@ -2,7 +2,7 @@
 
 use crate::squad_tracker::SquadTracker;
 use arcdps::imgui::{self, im_str, ImStr, ImString, TableFlags, Ui, Window};
-use std::marker::PhantomData;
+use std::{cmp::Ordering, marker::PhantomData};
 
 // Shamelessly stolen from https://github.com/gw2scratch/arcdps-clears
 fn centered_text(pUi: &Ui, pText: &ImStr) {
@@ -171,7 +171,11 @@ pub fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
     pUi.begin_table_with_flags(
         &ImString::new("ready_check_table"),
         3,
-        TableFlags::BORDERS | TableFlags::NO_HOST_EXTEND_X | TableFlags::SORTABLE | TableFlags::SORT_TRISTATE,
+        TableFlags::BORDERS
+            | TableFlags::NO_HOST_EXTEND_X
+            | TableFlags::SORTABLE
+            | TableFlags::SORT_MULTI
+            | TableFlags::SORT_TRISTATE,
     );
 
     pUi.table_setup_column(&ImString::new("account_name"));
@@ -181,30 +185,42 @@ pub fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
 
     let mut users: Vec<_> = pSquadTracker.get_squad_members().iter().collect();
 
-    if let Some(mut sort_specs) = table_sort_specs_mut(pUi) {
-        sort_specs.set_sorted();
-        let specs = sort_specs.specs();
+    if let Some(sort_specs) = table_sort_specs_mut(pUi) {
+        users.sort_by(|lhs, rhs| {
+            for spec in sort_specs.specs().iter() {
+                let sort_column = spec.column_idx();
+                debug_assert!(sort_column <= 2);
 
-        if let Some(spec) = specs.iter().next() {
-            let sort_column = spec.column_idx();
-            debug_assert!(sort_column <= 2);
+                let sort_direction = spec
+                    .sort_direction()
+                    .unwrap_or(TableSortDirection::Ascending);
 
-            let sort_direction = spec
-                .sort_direction()
-                .unwrap_or(TableSortDirection::Ascending);
-            users.sort_by(|lhs, rhs| {
                 let mut result = match sort_column {
-                    1 => lhs.1.current_ready_check_time.cmp(&rhs.1.current_ready_check_time),
-                    2 => lhs.1.total_ready_check_time.cmp(&rhs.1.total_ready_check_time),
-                    0 | _ => lhs.0.cmp(&rhs.0), // default to sort by name if an invalid column is found
+                    0 => lhs.0.cmp(&rhs.0),
+                    1 => lhs
+                        .1
+                        .current_ready_check_time
+                        .cmp(&rhs.1.current_ready_check_time),
+                    2 => lhs
+                        .1
+                        .total_ready_check_time
+                        .cmp(&rhs.1.total_ready_check_time),
+                    // Default to equal if column is invalid, which just lets the next sorter handle it instead
+                    _ => Ordering::Equal,
                 };
+                if result == Ordering::Equal {
+                    continue;
+                }
 
                 if sort_direction == TableSortDirection::Ascending {
                     result = result.reverse()
                 };
-                result
-            });
-        }
+
+                return result;
+            }
+
+            return Ordering::Equal;
+        });
     }
 
     for (account_name, member_state) in users {
