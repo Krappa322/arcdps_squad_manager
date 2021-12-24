@@ -239,6 +239,20 @@ impl SquadTracker {
     pub fn get_squad_members(&self) -> &HashMap<String, SquadMemberState> {
         &self.squad_members
     }
+
+    pub fn setup_mock_data(&mut self) {
+        assert_eq!(self.squad_members, HashMap::new());
+        self.ready_players = 2;
+        self.ready_check_started_time = Some(Instant::now() - Duration::new(15, 0));
+        self.squad_members.insert("Alice".to_string(), SquadMemberState::new(100, UserRole::Member, 0, false));
+        self.squad_members.get_mut("Alice").unwrap().total_ready_check_time = Duration::new(300, 0);
+        self.squad_members.insert("Bob".to_string(), SquadMemberState::new(100, UserRole::SquadLeader, 0, true));
+        self.squad_members.get_mut("Bob").unwrap().current_ready_check_time = Some(Duration::new(0, 0));
+        self.squad_members.get_mut("Bob").unwrap().total_ready_check_time = Duration::new(200, 0);
+        self.squad_members.insert("Charlie".to_string(), SquadMemberState::new(100, UserRole::Member, 0, true));
+        self.squad_members.get_mut("Charlie").unwrap().current_ready_check_time = Some(Duration::new(10, 0));
+        self.squad_members.get_mut("Charlie").unwrap().total_ready_check_time = Duration::new(100, 0);
+    }
 }
 
 #[cfg(test)]

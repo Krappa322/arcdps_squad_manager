@@ -37,7 +37,10 @@ fn unofficial_extras_init(
     pUnofficialExtrasVersion: Option<&'static str>,
 ) {
     if let Some(name) = pSelfAccountName {
-        *SQUAD_TRACKER.write() = Some(SquadTracker::new(name));
+        let mut tracker = SQUAD_TRACKER.write();
+        let tracker = tracker.get_or_insert(SquadTracker::new(name));
+        // mock
+        tracker.setup_mock_data();
     }
 
     info!(
@@ -56,6 +59,9 @@ fn init() {
     unsafe {
         consoleapi::AllocConsole();
     }
+
+    // mock
+    unofficial_extras_init(Some("self"), Some("MOCK"));
 
     match install_log_handler() {
         Ok(_) => println!("Starting log succeeded"),
@@ -81,6 +87,8 @@ fn imgui(pUi: &imgui::Ui, pNotChararacterSelectOrLoading: bool) {
 
     if let Some(tracker) = SQUAD_TRACKER.read().as_ref() {
         gui::draw(pUi, state, tracker);
+    } else {
+        debug!("Tried to render frame before initialization");
     }
 }
 
