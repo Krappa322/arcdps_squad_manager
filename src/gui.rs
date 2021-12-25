@@ -62,10 +62,10 @@ pub fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
 
                 let mut result = match sort_column {
                     0 => lhs.0.cmp(&rhs.0),
-                    1 => lhs
-                        .1
-                        .current_ready_check_time
-                        .cmp(&rhs.1.current_ready_check_time),
+                    // 1 => lhs
+                    //     .1
+                    //     .current_ready_check_time
+                    //     .cmp(&rhs.1.current_ready_check_time),
                     2 => lhs
                         .1
                         .total_ready_check_time
@@ -92,9 +92,9 @@ pub fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
         pUi.table_next_column();
         pUi.text(&ImString::new(account_name));
         pUi.table_next_column();
-        if let Some(current_ready_check_time) = member_state.current_ready_check_time {
-            imgui_ex::centered_text(pUi, &im_str!("{:#?}", current_ready_check_time));
-        }
+        // if let Some(current_ready_check_time) = member_state.current_ready_check_time {
+        //     imgui_ex::centered_text(pUi, &im_str!("{:#?}", current_ready_check_time));
+        // }
         pUi.table_next_column();
         imgui_ex::centered_text(pUi, &im_str!("{:#?}", member_state.total_ready_check_time));
     }

@@ -30,6 +30,14 @@ macro_rules! function_name_no_crate {
 }
 
 #[macro_export]
+macro_rules! assert_in_range {
+    ($value:expr, $min:expr, $max:expr) => (
+        more_asserts::assert_ge!($value, $min);
+        more_asserts::assert_le!($value, $max);
+    )
+}
+
+#[macro_export]
 macro_rules! trace {
     ($fmtstring:tt, $($arg:tt)*) => (
         log::trace!(std::concat!("{}|", $fmtstring), function_name_no_crate!(), $($arg)*)
