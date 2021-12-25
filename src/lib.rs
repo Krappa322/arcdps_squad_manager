@@ -3,18 +3,17 @@
 
 #[macro_use]
 mod infra;
-mod imgui_ex;
 mod gui;
+mod imgui_ex;
 mod squad_tracker;
 
 use arcdps::arcdps_export;
-use arcdps::UserInfoIter;
 use arcdps::imgui;
+use arcdps::UserInfoIter;
+use gui::GuiState;
 use infra::*;
 use squad_tracker::SquadTracker;
 use static_init::dynamic;
-use winapi::um::consoleapi;
-use gui::GuiState;
 
 arcdps_export! {
     name: "Squad Manager",
@@ -39,15 +38,27 @@ fn unofficial_extras_init(
 ) {
     if let Some(name) = pSelfAccountName {
         let mut tracker = SQUAD_TRACKER.write();
-        let tracker = tracker.get_or_insert(SquadTracker::new(name));
-        // mock
-        tracker.setup_mock_data();
-    }
+        tracker.get_or_insert(SquadTracker::new(name));
 
-    info!(
-        "Initialized - pSelfAccountName={:?} pUnofficialExtrasVersion={:?}",
-        pSelfAccountName, pUnofficialExtrasVersion
-    );
+        info!(
+            "Initialized - pSelfAccountName={:?} pUnofficialExtrasVersion={:?}",
+            pSelfAccountName, pUnofficialExtrasVersion
+        );
+    } else {
+        error!(
+            "Ignoring initialization - pSelfAccountName={:?} pUnofficialExtrasVersion={:?}",
+            pSelfAccountName, pUnofficialExtrasVersion
+        );
+    }
+}
+
+#[allow(dead_code)]
+fn mock_unofficial_extras_init() {
+    let mut tracker = SQUAD_TRACKER.write();
+    let tracker = tracker.get_or_insert(SquadTracker::new("mock_self"));
+    tracker.setup_mock_data();
+
+    info!("Initialized");
 }
 
 fn unofficial_extras_squad_update(pUsers: UserInfoIter) {
@@ -57,25 +68,17 @@ fn unofficial_extras_squad_update(pUsers: UserInfoIter) {
 }
 
 fn init() {
-    unsafe {
-        consoleapi::AllocConsole();
+    if let Err(e) = install_log_handler() {
+        println!("Starting log failed {}", e);
     }
-
-    // mock
-    unofficial_extras_init(Some("self"), Some("MOCK"));
-
-    match install_log_handler() {
-        Ok(_) => println!("Starting log succeeded"),
-        Err(e) => println!("Starting log failed {}", e),
-    }
-    info!("{}", "started logger");
+    info!("{}", "Started logger");
 
     install_panic_handler();
-    info!("{}", "started panic handler");
+    info!("{}", "Started panic handler");
 }
 
 fn release() {
-    info!("release");
+    info!("Release");
 }
 
 fn imgui(pUi: &imgui::Ui, pNotChararacterSelectOrLoading: bool) {
