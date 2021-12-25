@@ -9,7 +9,6 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-lazy_static = "1.4.0"
 log = "0.4"
 flexi_logger = { version = "0.19", default_features = false, features = ["async", "compress"] }
 backtrace = "0.3"

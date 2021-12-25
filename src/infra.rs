@@ -1,11 +1,10 @@
 #![allow(non_snake_case)]
 
 use backtrace::Backtrace;
-use lazy_static::lazy_static;
+use static_init::dynamic;
 use std::ffi::CString;
 use std::mem::size_of;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
 use winapi::shared::ntdef::TRUE;
 use winapi::um::dbghelp;
 use winapi::um::errhandlingapi::GetLastError;
@@ -129,14 +128,13 @@ fn get_global_sequence() -> Option<u64> {
     }
 }
 
-lazy_static! {
-    static ref LOGGER: Mutex<Option<flexi_logger::LoggerHandle>> = Mutex::new(None);
-}
+#[dynamic]
+static mut LOGGER: Option<flexi_logger::LoggerHandle> = None;
 
 pub fn install_log_handler() -> Result<(), flexi_logger::FlexiLoggerError> {
     use flexi_logger::*;
 
-    let mut logger = LOGGER.lock().unwrap();
+    let mut logger = LOGGER.write();
     if logger.is_some() {
         return Ok(()); // Return OK value in case logger is already initialized
     }

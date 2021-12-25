@@ -45,7 +45,6 @@ dependencies = [
  "arcdps",
  "backtrace",
  "flexi_logger",
- "lazy_static",
  "log",
  "more-asserts",
  "rstest",
