@@ -1,8 +1,17 @@
 #![allow(non_snake_case)]
 
-use crate::{imgui_ex, squad_tracker::SquadTracker};
-use arcdps::imgui::{im_str, ImString, TableFlags, Ui, Window};
-use std::cmp::Ordering;
+use crate::{
+    imgui_ex,
+    squad_tracker::{SquadMemberState, SquadTracker},
+};
+use arcdps::{
+    imgui::{im_str, ImString, TableFlags, Ui, Window},
+    UserRole,
+};
+use std::{
+    cmp::Ordering,
+    time::{Duration, Instant},
+};
 
 pub struct GuiState {
     main_window_open: bool,
@@ -48,7 +57,27 @@ pub fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
     pUi.table_setup_column(&ImString::new("total_ready_check_time"));
     pUi.table_headers_row();
 
-    let mut users: Vec<_> = pSquadTracker.get_squad_members().iter().collect();
+    let mut users: Vec<(&String, &SquadMemberState, Option<Duration>)> = Vec::new();
+    let mut ready_check_start_time: Option<Instant> = None;
+    for (account_name, user_state) in pSquadTracker.get_squad_members() {
+        if user_state.role == UserRole::SquadLeader && user_state.is_ready == true {
+            ready_check_start_time = user_state.last_ready_time;
+        }
+        users.push((account_name, user_state, None));
+    }
+
+    let now = Instant::now();
+    if let Some(start_time) = ready_check_start_time {
+        for (_account_name, user_state, unready_duration) in users.iter_mut() {
+            let ready_time = if user_state.is_ready == true {
+                user_state.last_ready_time.unwrap()
+            } else {
+                now
+            };
+
+            *unready_duration = Some(ready_time - start_time);
+        }
+    }
 
     if let Some(sort_specs) = imgui_ex::table_sort_specs_mut(pUi) {
         users.sort_by(|lhs, rhs| {
@@ -62,10 +91,7 @@ pub fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
 
                 let mut result = match sort_column {
                     0 => lhs.0.cmp(&rhs.0),
-                    // 1 => lhs
-                    //     .1
-                    //     .current_ready_check_time
-                    //     .cmp(&rhs.1.current_ready_check_time),
+                    1 => lhs.2.cmp(&rhs.2),
                     2 => lhs
                         .1
                         .total_ready_check_time
@@ -88,13 +114,19 @@ pub fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
         });
     }
 
-    for (account_name, member_state) in users {
+    for (account_name, member_state, unready_duration) in users {
         pUi.table_next_column();
         pUi.text(&ImString::new(account_name));
         pUi.table_next_column();
-        // if let Some(current_ready_check_time) = member_state.current_ready_check_time {
-        //     imgui_ex::centered_text(pUi, &im_str!("{:#?}", current_ready_check_time));
-        // }
+        if let Some(unready_duration) = unready_duration {
+            if member_state.is_ready {
+                const RED: [f32; 4] = [0.75, 0.0, 0.0, 1.0];
+                imgui_ex::centered_text_colored(pUi, RED, &im_str!("{:#?}", unready_duration));
+            } else {
+                const GREEN: [f32; 4] = [0.0, 0.75, 0.0, 1.0];
+                imgui_ex::centered_text_colored(pUi, GREEN, &im_str!("{:#?}", unready_duration));
+            }
+        }
         pUi.table_next_column();
         imgui_ex::centered_text(pUi, &im_str!("{:#?}", member_state.total_ready_check_time));
     }

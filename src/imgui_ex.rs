@@ -139,3 +139,12 @@ pub fn centered_text(pUi: &Ui, pText: &ImStr) {
     pUi.set_cursor_pos([new_x, pUi.cursor_pos()[1]]);
     pUi.text(pText);
 }
+
+pub fn centered_text_colored(pUi: &Ui, pColor: [f32; 4], pText: &ImStr) {
+    let current_x = pUi.cursor_pos()[0];
+    let text_width = pUi.calc_text_size(&pText, false, -1.0)[0];
+    let column_width = pUi.current_column_width();
+    let new_x = (current_x + column_width / 2. - text_width / 2.).max(current_x);
+    pUi.set_cursor_pos([new_x, pUi.cursor_pos()[1]]);
+    pUi.text_colored(pColor, pText);
+}

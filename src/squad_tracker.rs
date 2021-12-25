@@ -234,7 +234,7 @@ impl SquadTracker {
             SquadMemberState::new(100, UserRole::SquadLeader, 0, true),
         );
         self.squad_members.get_mut("Bob").unwrap().last_ready_time =
-            Some(now - Duration::new(0, 0));
+            Some(now - Duration::new(10, 0));
         self.squad_members
             .get_mut("Bob")
             .unwrap()
@@ -246,7 +246,7 @@ impl SquadTracker {
         self.squad_members
             .get_mut("Charlie")
             .unwrap()
-            .last_ready_time = Some(now - Duration::new(10, 0));
+            .last_ready_time = Some(now - Duration::new(5, 0));
         self.squad_members
             .get_mut("Charlie")
             .unwrap()
