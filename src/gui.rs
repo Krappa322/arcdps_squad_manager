@@ -45,8 +45,7 @@ pub fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
     pUi.begin_table_with_flags(
         &ImString::new("ready_check_table"),
         3,
-        TableFlags::BORDERS
-            | TableFlags::NO_HOST_EXTEND_X
+        TableFlags::NO_HOST_EXTEND_X
             | TableFlags::SORTABLE
             | TableFlags::SORT_MULTI
             | TableFlags::SORT_TRISTATE,
@@ -119,16 +118,29 @@ pub fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
         pUi.text(&ImString::new(account_name));
         pUi.table_next_column();
         if let Some(unready_duration) = unready_duration {
-            if member_state.is_ready {
-                const RED: [f32; 4] = [0.75, 0.0, 0.0, 1.0];
-                imgui_ex::centered_text_colored(pUi, RED, &im_str!("{:#?}", unready_duration));
-            } else {
-                const GREEN: [f32; 4] = [0.0, 0.75, 0.0, 1.0];
-                imgui_ex::centered_text_colored(pUi, GREEN, &im_str!("{:#?}", unready_duration));
-            }
+            const GREEN: [f32; 4] = [0.0, 0.75, 0.0, 1.0];
+            const RED: [f32; 4] = [0.85, 0.0, 0.0, 1.0];
+            let color = if member_state.is_ready { GREEN } else { RED };
+
+            imgui_ex::centered_text_colored(
+                pUi,
+                color,
+                &im_str!(
+                    "{:2}.{}s",
+                    unready_duration.as_secs(),
+                    unready_duration.subsec_millis() / 100
+                ),
+            );
         }
         pUi.table_next_column();
-        imgui_ex::centered_text(pUi, &im_str!("{:#?}", member_state.total_ready_check_time));
+        imgui_ex::centered_text(
+            pUi,
+            &im_str!(
+                "{:2}.{}s",
+                member_state.total_ready_check_time.as_secs(),
+                member_state.total_ready_check_time.subsec_millis() / 100
+            ),
+        );
     }
 
     pUi.end_table();

@@ -75,8 +75,6 @@ fn init() {
 
     install_panic_handler();
     info!("{}", "Started panic handler");
-
-    mock_unofficial_extras_init();
 }
 
 fn release() {
