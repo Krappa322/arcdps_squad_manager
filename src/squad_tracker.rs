@@ -44,21 +44,18 @@ fn handle_ready_status_changed(
 ) -> bool {
     let mut ready_check_aborted = false;
 
-    match pExistingUser.role {
-        UserRole::SquadLeader => {
-            if pExistingUser.is_ready == true {
-                *pReadyCheckStartedTime = Some(*pNow);
-                info!("Ready check started at {:?}", pNow);
-            } else {
-                info!(
-                    "Ready check which was started at {:?} was aborted at {:?}",
-                    pReadyCheckStartedTime, pNow
-                );
+    if pExistingUser.role == UserRole::SquadLeader {
+        if pExistingUser.is_ready == true {
+            *pReadyCheckStartedTime = Some(*pNow);
+            info!("Ready check started at {:?}", pNow);
+        } else {
+            info!(
+                "Ready check which was started at {:?} was aborted at {:?}",
+                pReadyCheckStartedTime, pNow
+            );
 
-                ready_check_aborted = true;
-            }
+            ready_check_aborted = true;
         }
-        _ => {}
     }
 
     if pExistingUser.is_ready == true {
@@ -99,9 +96,9 @@ fn handle_ready_check_finished(
     pReadyCheckDuration: Duration,
     pSuccessful: bool,
 ) {
-    info!("{:?} {:?}", &pSquadMembers, pReadyCheckDuration);
+    info!("Completing ready check (pSuccessful={}) which lasted for {:?}", pSuccessful, pReadyCheckDuration);
 
-    for (_account_name, state) in pSquadMembers {
+    for (_account_name, state) in pSquadMembers.iter_mut() {
         if pSuccessful == true {
             if let Some(time_spent) = state.current_ready_check_time {
                 state.total_ready_check_time += time_spent;
