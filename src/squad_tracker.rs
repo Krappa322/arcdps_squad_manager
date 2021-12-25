@@ -38,14 +38,14 @@ impl SquadMemberState {
 // Returns true if ready check was aborted
 fn handle_ready_status_changed(
     pReadyCheckStartedTime: &mut Option<Instant>,
-    pExistingUser: &mut SquadMemberState,
+    pExistingUser: (&str, &mut SquadMemberState),
     pReadyPlayers: &mut usize,
     pNow: &Instant,
 ) -> bool {
     let mut ready_check_aborted = false;
 
-    if pExistingUser.role == UserRole::SquadLeader {
-        if pExistingUser.is_ready == true {
+    if pExistingUser.1.role == UserRole::SquadLeader {
+        if pExistingUser.1.is_ready == true {
             *pReadyCheckStartedTime = Some(*pNow);
             info!("Ready check started at {:?}", pNow);
         } else {
@@ -58,30 +58,29 @@ fn handle_ready_status_changed(
         }
     }
 
-    if pExistingUser.is_ready == true {
+    if pExistingUser.1.is_ready == true {
         if let Some(start_time) = pReadyCheckStartedTime {
-            pExistingUser.current_ready_check_time = Some(*pNow - *start_time);
-            info!(
-                "User {:?} readied up - they spent {:?} doing so",
-                pExistingUser, pExistingUser.current_ready_check_time
-            )
+            pExistingUser.1.current_ready_check_time = Some(*pNow - *start_time);
+            info!("User readied up - {:?}", pExistingUser)
         } else {
             info!(
-                "User {:?} readied up when there was no ready check active",
+                "User readied up when there was no ready check active - {:?}",
                 pExistingUser
             )
         }
         *pReadyPlayers += 1;
-    } else if ready_check_aborted == true {
+    } else if ready_check_aborted == false {
         // User can't unready if ready check is finished
-        if let Some(time_spent) = pExistingUser.current_ready_check_time {
-            info!(
-                "User {:?} unreadied - current_ready_check_time={:?}",
-                pExistingUser, time_spent
-            )
+        if let Some(_time_spent) = pExistingUser.1.current_ready_check_time {
+            info!("User unreadied - {:?}", pExistingUser)
         }
-        pExistingUser.current_ready_check_time = None;
+        pExistingUser.1.current_ready_check_time = None;
         *pReadyPlayers -= 1;
+    } else {
+        info!(
+            "Ignoring update for user since ready check was just aborted - {:?}",
+            pExistingUser
+        );
     }
 
     ready_check_aborted
@@ -96,14 +95,20 @@ fn handle_ready_check_finished(
     pReadyCheckDuration: Duration,
     pSuccessful: bool,
 ) {
-    info!("Completing ready check (pSuccessful={}) which lasted for {:?}", pSuccessful, pReadyCheckDuration);
+    info!(
+        "Completing ready check (pSuccessful={}) which lasted for {:?}",
+        pSuccessful, pReadyCheckDuration
+    );
 
-    for (_account_name, state) in pSquadMembers.iter_mut() {
+    for (account_name, state) in pSquadMembers.iter_mut() {
         if pSuccessful == true {
             if let Some(time_spent) = state.current_ready_check_time {
                 state.total_ready_check_time += time_spent;
             } else {
-                error!("Ready check completed when {:?} wasn't ready", state);
+                error!(
+                    "Ready check completed when {:?} {:?} wasn't ready",
+                    account_name, state
+                );
                 debug_assert!(false);
             }
         }
@@ -155,7 +160,8 @@ impl SquadTracker {
                 UserRole::SquadLeader | UserRole::Lieutenant | UserRole::Member => {
                     // Either insert a new entry or update the existing one. Returns a reference to the user state if
                     // the ready check status updated (meaning further handling needs to be done to update fields)
-                    let new_user_state = match squad_members.entry(account_name.to_string()) {
+                    let entry = squad_members.entry(account_name.to_string());
+                    let new_user_state = match entry {
                         Entry::Occupied(entry) => {
                             let user = entry.into_mut();
                             let old_ready_status = user.is_ready;
@@ -188,7 +194,7 @@ impl SquadTracker {
                     if let Some(new_user_state) = new_user_state {
                         ready_check_aborted = handle_ready_status_changed(
                             ready_check_started_time,
-                            new_user_state,
+                            (account_name, new_user_state),
                             ready_players,
                             &now,
                         );
@@ -396,9 +402,11 @@ mod tests {
     }
 
     #[rstest]
-    #[case(false)]
-    #[case(true)]
-    fn ready_check(#[case] pAborted: bool) {
+    #[case(false, false)]
+    #[case(true, false)]
+    #[case(false, true)]
+    #[case(true, true)]
+    fn ready_check(#[case] pAborted: bool, #[case] pReadyAndUnready: bool) {
         install_log_handler().unwrap();
 
         let mut tracker = SquadTracker::new("self");
@@ -481,46 +489,93 @@ mod tests {
             );
         }
 
-        // Peer readies up
-        test_users.users.clear();
-        test_users.users.push(TestUser::new(
-            "peer".to_string(),
-            12345,
-            UserRole::Member,
-            0,
-            true,
-        ));
-        unsafe {
-            tracker.squad_update(test_users.get_iter());
+        let ready_peer_func = |tracker: &mut SquadTracker, test_users: &mut TestUserList| {
+            test_users.users.clear();
+            test_users.users.push(TestUser::new(
+                "peer".to_string(),
+                12345,
+                UserRole::Member,
+                0,
+                true,
+            ));
+            unsafe {
+                tracker.squad_update(test_users.get_iter());
+            }
+            assert!(tracker.ready_check_started_time.is_some());
+            assert_eq!(tracker.squad_members.len(), 3);
+            assert_eq!(tracker.squad_members["squad_leader"].is_ready, true);
+            assert_eq!(
+                tracker.squad_members["squad_leader"].current_ready_check_time,
+                Some(Duration::new(0, 0))
+            );
+            assert_eq!(
+                tracker.squad_members["squad_leader"].total_ready_check_time,
+                initial_ready_check_time_spent
+            );
+            assert_eq!(tracker.squad_members["self"].is_ready, false);
+            assert!(tracker.squad_members["self"]
+                .current_ready_check_time
+                .is_none());
+            assert_eq!(
+                tracker.squad_members["self"].total_ready_check_time,
+                initial_ready_check_time_spent
+            );
+            assert_eq!(tracker.squad_members["peer"].is_ready, true);
+            assert_gt!(
+                tracker.squad_members["peer"].current_ready_check_time,
+                Some(Duration::new(0, 0))
+            );
+            assert_eq!(
+                tracker.squad_members["peer"].total_ready_check_time,
+                initial_ready_check_time_spent
+            );
+        };
+        let unready_peer_func = |tracker: &mut SquadTracker, test_users: &mut TestUserList| {
+            test_users.users.clear();
+            test_users.users.push(TestUser::new(
+                "peer".to_string(),
+                12345,
+                UserRole::Member,
+                0,
+                false,
+            ));
+            unsafe {
+                tracker.squad_update(test_users.get_iter());
+            }
+            assert!(tracker.ready_check_started_time.is_some());
+            assert_eq!(tracker.squad_members.len(), 3);
+            assert_eq!(tracker.squad_members["squad_leader"].is_ready, true);
+            assert_eq!(
+                tracker.squad_members["squad_leader"].current_ready_check_time,
+                Some(Duration::new(0, 0))
+            );
+            assert_eq!(
+                tracker.squad_members["squad_leader"].total_ready_check_time,
+                initial_ready_check_time_spent
+            );
+            assert_eq!(tracker.squad_members["self"].is_ready, false);
+            assert!(tracker.squad_members["self"]
+                .current_ready_check_time
+                .is_none());
+            assert_eq!(
+                tracker.squad_members["self"].total_ready_check_time,
+                initial_ready_check_time_spent
+            );
+            assert_eq!(tracker.squad_members["peer"].is_ready, false);
+            assert!(tracker.squad_members["peer"]
+                .current_ready_check_time
+                .is_none());
+            assert_eq!(
+                tracker.squad_members["peer"].total_ready_check_time,
+                initial_ready_check_time_spent
+            );
+        };
+
+        ready_peer_func(&mut tracker, &mut test_users);
+        if pReadyAndUnready == true {
+            unready_peer_func(&mut tracker, &mut test_users);
+            ready_peer_func(&mut tracker, &mut test_users);
         }
-        assert!(tracker.ready_check_started_time.is_some());
-        assert_eq!(tracker.squad_members.len(), 3);
-        assert_eq!(tracker.squad_members["squad_leader"].is_ready, true);
-        assert_eq!(
-            tracker.squad_members["squad_leader"].current_ready_check_time,
-            Some(Duration::new(0, 0))
-        );
-        assert_eq!(
-            tracker.squad_members["squad_leader"].total_ready_check_time,
-            initial_ready_check_time_spent
-        );
-        assert_eq!(tracker.squad_members["self"].is_ready, false);
-        assert!(tracker.squad_members["self"]
-            .current_ready_check_time
-            .is_none());
-        assert_eq!(
-            tracker.squad_members["self"].total_ready_check_time,
-            initial_ready_check_time_spent
-        );
-        assert_eq!(tracker.squad_members["peer"].is_ready, true);
-        assert_gt!(
-            tracker.squad_members["peer"].current_ready_check_time,
-            Some(Duration::new(0, 0))
-        );
-        assert_eq!(
-            tracker.squad_members["peer"].total_ready_check_time,
-            initial_ready_check_time_spent
-        );
 
         if pAborted == false {
             // Self readies up - this finishes the ready check
