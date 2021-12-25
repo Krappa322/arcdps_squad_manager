@@ -75,7 +75,7 @@ pub fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
                 now
             };
 
-            *unready_duration = Some(ready_time - start_time);
+            *unready_duration = Some(ready_time.max(start_time) - start_time);
         }
     }
 
