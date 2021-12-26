@@ -2,6 +2,7 @@
 name = "arcdps_squad_manager"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -20,3 +21,6 @@ static_init = "1.0"
 [dev-dependencies]
 more-asserts = "0.2"
 rstest = "0.12"
+
+[build-dependencies]
+winres = "0.1"
