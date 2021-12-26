@@ -569,16 +569,29 @@ mod tests {
             }
         }
 
-        if pAborted == false {
-            for user in ["self", "peer"] {
+        for user in ["self", "peer"] {
+            let actual_user = tracker.squad_members.get(user).unwrap();
+            let expected_user = expected_state.get_mut(user).unwrap();
+
+            if pAborted == false {
                 assert_gt!(
-                    tracker.squad_members[user].total_ready_check_time,
+                    actual_user.total_ready_check_time,
                     initial_ready_check_time_spent
                 );
+                assert_eq!(
+                    actual_user.last_unready_duration,
+                    Some(actual_user.total_ready_check_time - initial_ready_check_time_spent)
+                );
 
-                expected_state.get_mut(user).unwrap().total_ready_check_time =
-                    tracker.squad_members[user].total_ready_check_time;
+                expected_user.total_ready_check_time = actual_user.total_ready_check_time;
+                expected_user.last_unready_duration = actual_user.last_unready_duration;
             }
+        }
+        if pAborted == false {
+            expected_state
+                .get_mut("squad_leader")
+                .unwrap()
+                .last_unready_duration = Some(Duration::new(0, 0));
         }
 
         assert_eq!(tracker.squad_members, expected_state);
@@ -671,33 +684,43 @@ mod tests {
         }
 
         if pAborted == false {
+            let actual_self_user = tracker.squad_members.get("self").unwrap();
             assert_gt!(
-                tracker.squad_members["self"].total_ready_check_time,
+                actual_self_user.total_ready_check_time,
                 initial_ready_check_time_spent
             );
+            assert_eq!(
+                actual_self_user.last_unready_duration,
+                Some(actual_self_user.total_ready_check_time - initial_ready_check_time_spent)
+            );
 
-            expected_state
-                .get_mut("self")
-                .unwrap()
-                .total_ready_check_time = tracker.squad_members["self"].total_ready_check_time;
+            let expected_self_user = expected_state.get_mut("self").unwrap();
+            expected_self_user.total_ready_check_time = actual_self_user.total_ready_check_time;
+            expected_self_user.last_unready_duration = actual_self_user.last_unready_duration;
 
             // Peer readied at the first possible moment, so the increment could be zero unless they did a ready-unready cycle
+            let actual_peer_user = tracker.squad_members.get("peer").unwrap();
+            let expected_peer_user = expected_state.get_mut("peer").unwrap();
             if pReadyAndUnready == true {
                 assert_gt!(
-                    tracker.squad_members["peer"].total_ready_check_time,
+                    actual_peer_user.total_ready_check_time,
                     initial_ready_check_time_spent
+                );
+                assert_eq!(
+                    actual_peer_user.last_unready_duration,
+                    Some(actual_peer_user.total_ready_check_time - initial_ready_check_time_spent)
                 );
 
-                expected_state
-                    .get_mut("peer")
-                    .unwrap()
-                    .total_ready_check_time = tracker.squad_members["peer"].total_ready_check_time;
+                expected_peer_user.total_ready_check_time = actual_peer_user.total_ready_check_time;
+                expected_peer_user.last_unready_duration = actual_peer_user.last_unready_duration;
             } else {
-                assert_eq!(
-                    tracker.squad_members["peer"].total_ready_check_time,
-                    initial_ready_check_time_spent
-                );
+                expected_peer_user.last_unready_duration = Some(Duration::new(0, 0));
             }
+
+            expected_state
+                .get_mut("squad_leader")
+                .unwrap()
+                .last_unready_duration = Some(Duration::new(0, 0));
         }
 
         assert_eq!(tracker.squad_members, expected_state);
