@@ -45,15 +45,16 @@ pub fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
     pUi.begin_table_with_flags(
         &ImString::new("ready_check_table"),
         3,
-        TableFlags::NO_HOST_EXTEND_X
+        TableFlags::BORDERS
+            | TableFlags::NO_HOST_EXTEND_X
             | TableFlags::SORTABLE
             | TableFlags::SORT_MULTI
             | TableFlags::SORT_TRISTATE,
     );
 
-    pUi.table_setup_column(&ImString::new("account_name"));
-    pUi.table_setup_column(&ImString::new("current_ready_check_time"));
-    pUi.table_setup_column(&ImString::new("total_ready_check_time"));
+    pUi.table_setup_column(&ImString::new("Account Name"));
+    pUi.table_setup_column(&ImString::new("Current Ready Check"));
+    pUi.table_setup_column(&ImString::new("Total Time Unready"));
     pUi.table_headers_row();
 
     let mut users: Vec<(&String, &SquadMemberState, Option<Duration>)> = Vec::new();
@@ -62,19 +63,19 @@ pub fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
         if user_state.role == UserRole::SquadLeader && user_state.is_ready == true {
             ready_check_start_time = user_state.last_ready_time;
         }
-        users.push((account_name, user_state, None));
+        users.push((account_name, user_state, user_state.last_unready_duration));
     }
 
     let now = Instant::now();
     if let Some(start_time) = ready_check_start_time {
-        for (_account_name, user_state, unready_duration) in users.iter_mut() {
+        for (_account_name, user_state, last_unready_duration) in users.iter_mut() {
             let ready_time = if user_state.is_ready == true {
                 user_state.last_ready_time.unwrap()
             } else {
                 now
             };
 
-            *unready_duration = Some(ready_time.max(start_time) - start_time);
+            *last_unready_duration = Some(ready_time.max(start_time) - start_time);
         }
     }
 
@@ -113,25 +114,36 @@ pub fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
         });
     }
 
-    for (account_name, member_state, unready_duration) in users {
+    for (account_name, member_state, last_unready_duration) in users {
         pUi.table_next_column();
         pUi.text(&ImString::new(account_name));
         pUi.table_next_column();
-        if let Some(unready_duration) = unready_duration {
-            const GREEN: [f32; 4] = [0.0, 0.75, 0.0, 1.0];
-            const RED: [f32; 4] = [0.85, 0.0, 0.0, 1.0];
-            let color = if member_state.is_ready { GREEN } else { RED };
 
+        const GREEN: [f32; 4] = [0.0, 0.75, 0.0, 1.0];
+        const RED: [f32; 4] = [0.85, 0.0, 0.0, 1.0];
+        const GRAY: [f32; 4] = [0.62, 0.62, 0.62, 1.0];
+
+        if let Some(last_unready_duration) = last_unready_duration {
+            let color = if ready_check_start_time.is_some() {
+                if member_state.is_ready {
+                    GREEN
+                } else {
+                    RED
+                }
+            } else {
+                GRAY
+            };
             imgui_ex::centered_text_colored(
                 pUi,
                 color,
                 &im_str!(
                     "{:2}.{}s",
-                    unready_duration.as_secs(),
-                    unready_duration.subsec_millis() / 100
+                    last_unready_duration.as_secs(),
+                    last_unready_duration.subsec_millis() / 100
                 ),
             );
         }
+
         pUi.table_next_column();
         imgui_ex::centered_text(
             pUi,

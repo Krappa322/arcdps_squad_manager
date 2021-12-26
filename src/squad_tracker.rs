@@ -13,6 +13,7 @@ pub struct SquadMemberState {
     pub is_ready: bool,
     pub last_ready_time: Option<Instant>,
     pub last_unready_time: Option<Instant>,
+    pub last_unready_duration: Option<Duration>,
     pub total_ready_check_time: Duration,
 }
 
@@ -26,6 +27,7 @@ impl SquadMemberState {
             last_ready_time: None,
             last_unready_time: None,
             total_ready_check_time: Duration::new(0, 0),
+            last_unready_duration: None,
         }
     }
 
@@ -114,6 +116,7 @@ fn handle_ready_check_finished(
                 "{:?} spent {:?} in ready check",
                 account_name, time_spent_unready
             );
+            state.last_unready_duration = Some(time_spent_unready);
             state.total_ready_check_time += time_spent_unready;
         }
     } else {
@@ -217,7 +220,8 @@ impl SquadTracker {
         &self.squad_members
     }
 
-    pub fn setup_mock_data(&mut self) {
+    #[allow(dead_code)]
+    pub fn setup_mock_data_active_ready_check(&mut self) {
         let now = Instant::now();
 
         assert_eq!(self.squad_members, HashMap::new());
@@ -225,32 +229,56 @@ impl SquadTracker {
             "Alice".to_string(),
             SquadMemberState::new(100, UserRole::Member, 0, false),
         );
-        self.squad_members
-            .get_mut("Alice")
-            .unwrap()
-            .total_ready_check_time = Duration::new(100, 0);
+        let alice = self.squad_members.get_mut("Alice").unwrap();
+        alice.total_ready_check_time = Duration::new(100, 0);
+
         self.squad_members.insert(
             "Bob".to_string(),
             SquadMemberState::new(100, UserRole::SquadLeader, 0, true),
         );
-        self.squad_members.get_mut("Bob").unwrap().last_ready_time =
-            Some(now - Duration::new(10, 0));
-        self.squad_members
-            .get_mut("Bob")
-            .unwrap()
-            .total_ready_check_time = Duration::new(200, 0);
+        let bob = self.squad_members.get_mut("Bob").unwrap();
+        bob.last_ready_time = Some(now - Duration::new(10, 0));
+        bob.total_ready_check_time = Duration::new(200, 0);
+
         self.squad_members.insert(
             "Charlie".to_string(),
             SquadMemberState::new(100, UserRole::Member, 0, true),
         );
-        self.squad_members
-            .get_mut("Charlie")
-            .unwrap()
-            .last_ready_time = Some(now - Duration::new(5, 0));
-        self.squad_members
-            .get_mut("Charlie")
-            .unwrap()
-            .total_ready_check_time = Duration::new(100, 0);
+        let charlie = self.squad_members.get_mut("Charlie").unwrap();
+        charlie.last_ready_time = Some(now - Duration::new(5, 0));
+        charlie.total_ready_check_time = Duration::new(100, 0);
+    }
+
+    #[allow(dead_code)]
+    pub fn setup_mock_data_inactive_ready_check(&mut self) {
+        let now = Instant::now();
+
+        assert_eq!(self.squad_members, HashMap::new());
+        self.squad_members.insert(
+            "Alice".to_string(),
+            SquadMemberState::new(100, UserRole::Member, 0, false),
+        );
+        let alice = self.squad_members.get_mut("Alice").unwrap();
+        alice.total_ready_check_time = Duration::new(100, 0);
+        alice.last_unready_duration = Some(Duration::new(30, 400_000));
+
+        self.squad_members.insert(
+            "Bob".to_string(),
+            SquadMemberState::new(100, UserRole::SquadLeader, 0, false),
+        );
+        let bob = self.squad_members.get_mut("Bob").unwrap();
+        bob.last_ready_time = Some(now - Duration::new(10, 0));
+        bob.total_ready_check_time = Duration::new(200, 0);
+        bob.last_unready_duration = Some(Duration::new(0, 0));
+
+        self.squad_members.insert(
+            "Charlie".to_string(),
+            SquadMemberState::new(100, UserRole::Member, 0, false),
+        );
+        let charlie = self.squad_members.get_mut("Charlie").unwrap();
+        charlie.last_ready_time = Some(now - Duration::new(5, 0));
+        charlie.total_ready_check_time = Duration::new(100, 0);
+        charlie.last_unready_duration = Some(Duration::new(10, 0));
     }
 }
 

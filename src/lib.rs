@@ -56,7 +56,8 @@ fn unofficial_extras_init(
 fn mock_unofficial_extras_init() {
     let mut tracker = SQUAD_TRACKER.write();
     let tracker = tracker.get_or_insert(SquadTracker::new("mock_self"));
-    tracker.setup_mock_data();
+    //tracker.setup_mock_data_active_ready_check();
+    tracker.setup_mock_data_inactive_ready_check();
 
     info!("Initialized");
 }
