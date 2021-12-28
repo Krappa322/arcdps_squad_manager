@@ -1,6 +1,8 @@
 #![allow(non_snake_case)]
 
 use backtrace::Backtrace;
+use flexi_logger::DeferredNow;
+use flexi_logger::filter::{LogLineFilter, LogLineWriter};
 use static_init::dynamic;
 use std::ffi::CString;
 use std::mem::size_of;
@@ -139,6 +141,23 @@ fn get_global_sequence() -> Option<u64> {
 #[dynamic]
 static mut LOGGER: Option<flexi_logger::LoggerHandle> = None;
 
+pub struct LogFilter;
+impl LogLineFilter for LogFilter {
+    fn write(
+        &self,
+        now: &mut DeferredNow,
+        record: &log::Record,
+        log_line_writer: &dyn LogLineWriter,
+    ) -> std::io::Result<()> {
+        if let Some(module_path) = record.module_path() {
+            if module_path.starts_with("arcdps_squad_manager") {
+                log_line_writer.write(now, record)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 pub fn install_log_handler() -> Result<(), flexi_logger::FlexiLoggerError> {
     use flexi_logger::*;
 
@@ -148,7 +167,7 @@ pub fn install_log_handler() -> Result<(), flexi_logger::FlexiLoggerError> {
     }
 
     *logger = Some(
-        Logger::try_with_str("info")?
+        Logger::try_with_str("debug")?
             .log_to_file(
                 FileSpec::default()
                     .directory("addons/logs/arcdps_squad_manager")
@@ -172,6 +191,7 @@ pub fn install_log_handler() -> Result<(), flexi_logger::FlexiLoggerError> {
                     message = &record.args()
                 ))
             })
+            .filter(Box::new(LogFilter))
             .write_mode(WriteMode::Direct)
             .start()?,
     );
