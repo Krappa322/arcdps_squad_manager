@@ -3,7 +3,7 @@
 use crate::{
     imgui_ex,
     squad_tracker::{SquadMemberState, SquadTracker},
-    updates::{install_update, UpdateInfo, UpdateStatus, tag_to_version_num},
+    updates::{install_update, tag_to_version_num, UpdateInfo, UpdateStatus},
     NEW_UPDATE,
 };
 use arcdps::{
@@ -190,7 +190,10 @@ fn draw_update_window(pUi: &Ui, pUpdate: &mut UpdateInfo) {
     );
     pUi.text_colored(
         GREEN,
-        im_str!("New version: {}", tag_to_version_num(&pUpdate.newer_release.tag_name)),
+        im_str!(
+            "New version: {}",
+            tag_to_version_num(&pUpdate.newer_release.tag_name)
+        ),
     );
 
     match &pUpdate.status {

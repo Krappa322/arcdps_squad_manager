@@ -1,8 +1,8 @@
 #![allow(non_snake_case)]
 
 use backtrace::Backtrace;
-use flexi_logger::DeferredNow;
 use flexi_logger::filter::{LogLineFilter, LogLineWriter};
+use flexi_logger::DeferredNow;
 use static_init::dynamic;
 use std::ffi::CString;
 use std::mem::size_of;
@@ -27,16 +27,16 @@ macro_rules! function_name_no_crate {
         let crate_name_end_index = raw_name.find(':').unwrap();
         // 2 is the length of "::" delimiting the crate name and the function name start
         // 3 is the length of "::f"
-        &raw_name[crate_name_end_index + 2 .. raw_name.len() - 3]
+        &raw_name[crate_name_end_index + 2..raw_name.len() - 3]
     }};
 }
 
 #[macro_export]
 macro_rules! assert_in_range {
-    ($value:expr, $min:expr, $max:expr) => (
+    ($value:expr, $min:expr, $max:expr) => {
         more_asserts::assert_ge!($value, $min);
         more_asserts::assert_le!($value, $max);
-    )
+    };
 }
 
 #[macro_export]
@@ -185,7 +185,10 @@ pub fn install_log_handler() -> Result<(), flexi_logger::FlexiLoggerError> {
                 );
                 write.write_fmt(format_args!(
                     "{time} {thread_id} {level:.1} {message}",
-                    time = now.now().format(&format).unwrap_or("Unknown time".to_string()),
+                    time = now
+                        .now()
+                        .format(&format)
+                        .unwrap_or("Unknown time".to_string()),
                     thread_id = get_current_thread_id(),
                     level = record.level(),
                     message = &record.args()
