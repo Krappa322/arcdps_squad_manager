@@ -6,6 +6,7 @@ mod infra;
 mod gui;
 mod imgui_ex;
 mod squad_tracker;
+mod updates;
 
 use arcdps::arcdps_export;
 use arcdps::imgui;
@@ -14,6 +15,7 @@ use gui::GuiState;
 use infra::*;
 use squad_tracker::SquadTracker;
 use static_init::dynamic;
+use updates::{find_potential_update, UpdateInfo};
 
 arcdps_export! {
     name: "Squad Manager",
@@ -31,6 +33,9 @@ static mut SQUAD_TRACKER: Option<SquadTracker> = None;
 
 #[dynamic]
 static mut GUI_STATE: Option<GuiState> = None;
+
+#[dynamic]
+static mut NEW_UPDATE: Option<UpdateInfo> = None;
 
 fn unofficial_extras_init(
     pSelfAccountName: Option<&str>,
@@ -76,6 +81,9 @@ fn init() {
 
     install_panic_handler();
     info!("{}", "Started panic handler");
+
+    find_potential_update();
+    //mock_unofficial_extras_init();
 }
 
 fn release() {

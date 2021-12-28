@@ -3,6 +3,8 @@
 use crate::{
     imgui_ex,
     squad_tracker::{SquadMemberState, SquadTracker},
+    updates::{install_update, UpdateInfo, UpdateStatus, tag_to_version_num},
+    NEW_UPDATE,
 };
 use arcdps::{
     imgui::{im_str, ImString, TableFlags, Ui, Window},
@@ -26,22 +28,38 @@ impl GuiState {
 }
 
 pub fn draw(pUi: &Ui, pState: &mut GuiState, pSquadTracker: &SquadTracker) {
-    if pState.main_window_open == false {
-        return;
+    if pState.main_window_open == true {
+        Window::new(&ImString::new("Squad Manager###SQUAD_MANAGER_MAIN"))
+            .always_auto_resize(true)
+            .focus_on_appearing(false)
+            .no_nav()
+            .collapsible(false)
+            .opened(&mut pState.main_window_open)
+            .build(&pUi, || {
+                draw_ready_check_tab(pUi, pSquadTracker);
+            });
     }
 
-    Window::new(&ImString::new("Squad Manager###SQUAD_MANAGER_MAIN"))
-        .always_auto_resize(true)
-        .focus_on_appearing(false)
-        .no_nav()
-        .collapsible(false)
-        .opened(&mut pState.main_window_open)
-        .build(&pUi, || {
-            draw_ready_check_tab(pUi, pSquadTracker);
-        });
+    let mut raw_update = NEW_UPDATE.write();
+    if let Some(update) = raw_update.as_mut() {
+        let mut open = true;
+        Window::new(&ImString::new("Squad Manager###SQUAD_MANAGER_UPDATE"))
+            .always_auto_resize(true)
+            .focus_on_appearing(false)
+            .no_nav()
+            .collapsible(false)
+            .opened(&mut open)
+            .build(&pUi, || {
+                draw_update_window(pUi, update);
+            });
+
+        if open == false {
+            *raw_update = None;
+        }
+    }
 }
 
-pub fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
+fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
     pUi.begin_table_with_flags(
         &ImString::new("ready_check_table"),
         3,
@@ -156,6 +174,39 @@ pub fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
     }
 
     pUi.end_table();
+}
+
+fn draw_update_window(pUi: &Ui, pUpdate: &mut UpdateInfo) {
+    const RED: [f32; 4] = [0.85, 0.0, 0.0, 1.0];
+    const GREEN: [f32; 4] = [0.0, 0.85, 0.0, 1.0];
+
+    pUi.text_colored(
+        RED,
+        im_str!("A new update for the squad manager addon is available"),
+    );
+    pUi.text_colored(
+        RED,
+        im_str!("Current version: {}", env!("CARGO_PKG_VERSION")),
+    );
+    pUi.text_colored(
+        GREEN,
+        im_str!("New version: {}", tag_to_version_num(&pUpdate.newer_release.tag_name)),
+    );
+
+    match &pUpdate.status {
+        UpdateStatus::UpdateAvailable(_) => {
+            if pUi.button(im_str!("Update automatically"), [0.0, 0.0]) == true {
+                install_update(pUpdate);
+            }
+        }
+        UpdateStatus::Downloading => pUi.text("Downloading update"),
+        UpdateStatus::Updating => pUi.text("Installing update"),
+        UpdateStatus::RestartPending => pUi.text_colored(
+            GREEN,
+            im_str!("Update finished, restart Guild Wars 2 for the update to take effect"),
+        ),
+        UpdateStatus::UpdateError(e) => pUi.text_colored(RED, im_str!("Update failed - {}", e)),
+    }
 }
 
 pub fn draw_options(pUi: &Ui, pState: &mut GuiState) {
