@@ -50,7 +50,7 @@ impl UpdateInfo {
     }
 }
 
-const RELEASE_REPO: &str = "Krappa322/arcdps_unofficial_extras_releases";
+const RELEASE_REPO: &str = "Krappa322/arcdps_squad_manager";
 
 pub fn tag_to_version_num(pTagName: &str) -> String {
     pTagName
