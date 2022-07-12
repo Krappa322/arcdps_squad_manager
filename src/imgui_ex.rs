@@ -1,4 +1,4 @@
-use arcdps::imgui::{self, ImStr, Ui};
+use arcdps::imgui::{self, Ui};
 use std::marker::PhantomData;
 
 // START COPIED FROM LATEST IMGUI-RS - https://github.com/imgui-rs/imgui-rs/blob/main/imgui/src/tables.rs#L737
@@ -131,18 +131,18 @@ pub fn table_sort_specs_mut<'a>(_pUi: &'a Ui) -> Option<TableSortSpecsMut<'a>> {
 // END COPIED FROM LATEST IMGUI-RS
 
 // Shamelessly copied from https://github.com/gw2scratch/arcdps-clears
-pub fn centered_text(pUi: &Ui, pText: &ImStr) {
+pub fn centered_text<T: AsRef<str>>(pUi: &Ui, pText: T) {
     let current_x = pUi.cursor_pos()[0];
-    let text_width = pUi.calc_text_size(&pText, false, -1.0)[0];
+    let text_width = pUi.calc_text_size(&pText)[0];
     let column_width = pUi.current_column_width();
     let new_x = (current_x + column_width / 2. - text_width / 2.).max(current_x);
     pUi.set_cursor_pos([new_x, pUi.cursor_pos()[1]]);
     pUi.text(pText);
 }
 
-pub fn centered_text_colored(pUi: &Ui, pColor: [f32; 4], pText: &ImStr) {
+pub fn centered_text_colored<T: AsRef<str>>(pUi: &Ui, pColor: [f32; 4], pText: T) {
     let current_x = pUi.cursor_pos()[0];
-    let text_width = pUi.calc_text_size(&pText, false, -1.0)[0];
+    let text_width = pUi.calc_text_size(&pText)[0];
     let column_width = pUi.current_column_width();
     let new_x = (current_x + column_width / 2. - text_width / 2.).max(current_x);
     pUi.set_cursor_pos([new_x, pUi.cursor_pos()[1]]);

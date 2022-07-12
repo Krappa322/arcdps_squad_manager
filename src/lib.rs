@@ -8,6 +8,7 @@ mod imgui_ex;
 mod squad_tracker;
 mod updates;
 
+use arcdps::ChatMessageInfo;
 use arcdps::arcdps_export;
 use arcdps::imgui;
 use arcdps::UserInfoIter;
@@ -26,6 +27,7 @@ arcdps_export! {
     release: release,
     unofficial_extras_init: unofficial_extras_init,
     unofficial_extras_squad_update: unofficial_extras_squad_update,
+    unofficial_extras_chat_message: unofficial_extras_chat_message,
 }
 
 #[dynamic]
@@ -57,6 +59,12 @@ fn unofficial_extras_init(
     }
 }
 
+fn unofficial_extras_chat_message(
+    pChatMessage: &ChatMessageInfo,
+) {
+    info!("{} -> {}", pChatMessage.account_name, pChatMessage.text);
+}
+
 #[allow(dead_code)]
 fn mock_unofficial_extras_init() {
     let mut tracker = SQUAD_TRACKER.write();
@@ -73,7 +81,7 @@ fn unofficial_extras_squad_update(pUsers: UserInfoIter) {
     }
 }
 
-fn init() {
+fn init() -> Result<(), Box<dyn std::error::Error>> {
     if let Err(e) = install_log_handler() {
         println!("Starting log failed {}", e);
     }
@@ -84,6 +92,8 @@ fn init() {
 
     find_potential_update();
     //mock_unofficial_extras_init();
+
+    Ok(())
 }
 
 fn release() {

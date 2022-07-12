@@ -7,7 +7,7 @@ use crate::{
     NEW_UPDATE,
 };
 use arcdps::{
-    imgui::{im_str, ImString, TableFlags, Ui, Window},
+    imgui::{ImString, TableFlags, Ui, Window},
     UserRole,
 };
 use std::{
@@ -60,7 +60,7 @@ pub fn draw(pUi: &Ui, pState: &mut GuiState, pSquadTracker: &SquadTracker) {
 }
 
 fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
-    pUi.begin_table_with_flags(
+    let _table_ref = pUi.begin_table_with_flags(
         &ImString::new("ready_check_table"),
         3,
         TableFlags::BORDERS
@@ -154,7 +154,7 @@ fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
             imgui_ex::centered_text_colored(
                 pUi,
                 color,
-                &im_str!(
+                format!(
                     "{:2}.{}s",
                     last_unready_duration.as_secs(),
                     last_unready_duration.subsec_millis() / 100
@@ -165,15 +165,13 @@ fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
         pUi.table_next_column();
         imgui_ex::centered_text(
             pUi,
-            &im_str!(
+            format!(
                 "{:2}.{}s",
                 member_state.total_ready_check_time.as_secs(),
                 member_state.total_ready_check_time.subsec_millis() / 100
             ),
         );
     }
-
-    pUi.end_table();
 }
 
 fn draw_update_window(pUi: &Ui, pUpdate: &mut UpdateInfo) {
@@ -182,15 +180,15 @@ fn draw_update_window(pUi: &Ui, pUpdate: &mut UpdateInfo) {
 
     pUi.text_colored(
         RED,
-        im_str!("A new update for the squad manager addon is available"),
+        "A new update for the squad manager addon is available",
     );
     pUi.text_colored(
         RED,
-        im_str!("Current version: {}", env!("CARGO_PKG_VERSION")),
+        format!("Current version: {}", env!("CARGO_PKG_VERSION")),
     );
     pUi.text_colored(
         GREEN,
-        im_str!(
+        format!(
             "New version: {}",
             tag_to_version_num(&pUpdate.newer_release.tag_name)
         ),
@@ -198,7 +196,7 @@ fn draw_update_window(pUi: &Ui, pUpdate: &mut UpdateInfo) {
 
     match &pUpdate.status {
         UpdateStatus::UpdateAvailable(_) => {
-            if pUi.button(im_str!("Update automatically"), [0.0, 0.0]) == true {
+            if pUi.button("Update automatically") == true {
                 install_update(pUpdate);
             }
         }
@@ -206,9 +204,9 @@ fn draw_update_window(pUi: &Ui, pUpdate: &mut UpdateInfo) {
         UpdateStatus::Updating => pUi.text("Installing update"),
         UpdateStatus::RestartPending => pUi.text_colored(
             GREEN,
-            im_str!("Update finished, restart Guild Wars 2 for the update to take effect"),
+            "Update finished, restart Guild Wars 2 for the update to take effect",
         ),
-        UpdateStatus::UpdateError(e) => pUi.text_colored(RED, im_str!("Update failed - {}", e)),
+        UpdateStatus::UpdateError(e) => pUi.text_colored(RED, format!("Update failed - {}", e)),
     }
 }
 
