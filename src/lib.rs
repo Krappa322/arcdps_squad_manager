@@ -6,12 +6,14 @@ mod infra;
 mod gui;
 mod imgui_ex;
 mod squad_tracker;
+mod chat_log;
 mod updates;
 
 use arcdps::ChatMessageInfo;
 use arcdps::arcdps_export;
 use arcdps::imgui;
 use arcdps::UserInfoIter;
+use chat_log::ChatLog;
 use gui::GuiState;
 use infra::*;
 use squad_tracker::SquadTracker;
@@ -34,6 +36,9 @@ arcdps_export! {
 static mut SQUAD_TRACKER: Option<SquadTracker> = None;
 
 #[dynamic]
+static mut CHAT_LOG: Option<ChatLog> = None;
+
+#[dynamic]
 static mut GUI_STATE: Option<GuiState> = None;
 
 #[dynamic]
@@ -44,8 +49,14 @@ fn unofficial_extras_init(
     pUnofficialExtrasVersion: Option<&'static str>,
 ) {
     if let Some(name) = pSelfAccountName {
-        let mut tracker = SQUAD_TRACKER.write();
-        tracker.get_or_insert(SquadTracker::new(name));
+        {
+            let mut tracker = SQUAD_TRACKER.write();
+            tracker.get_or_insert(SquadTracker::new(name));
+        }
+        {
+            let mut chatlog = CHAT_LOG.write();
+            chatlog.get_or_insert(ChatLog::new());
+        }
 
         info!(
             "Initialized - pSelfAccountName={:?} pUnofficialExtrasVersion={:?}",
@@ -62,7 +73,9 @@ fn unofficial_extras_init(
 fn unofficial_extras_chat_message(
     pChatMessage: &ChatMessageInfo,
 ) {
-    info!("{} -> {}", pChatMessage.account_name, pChatMessage.text);
+    if let Some(chatlog) = &mut *CHAT_LOG.write() {
+        chatlog.add(pChatMessage);
+    }
 }
 
 #[allow(dead_code)]
@@ -108,8 +121,10 @@ fn imgui(pUi: &imgui::Ui, pNotChararacterSelectOrLoading: bool) {
     let mut state = GUI_STATE.write();
     let state = state.get_or_insert(GuiState::new());
 
-    if let Some(tracker) = SQUAD_TRACKER.read().as_ref() {
-        gui::draw(pUi, state, tracker);
+    let tracker = SQUAD_TRACKER.read();
+    let chatlog = CHAT_LOG.read();
+    if let Some((tracker, chatlog)) = tracker.as_ref().zip(chatlog.as_ref()) {
+        gui::draw(pUi, state, tracker, chatlog);
     } else {
         debug!("Tried to render frame before initialization");
     }

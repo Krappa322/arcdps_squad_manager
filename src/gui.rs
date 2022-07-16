@@ -1,42 +1,58 @@
 #![allow(non_snake_case)]
 
 use crate::{
+    chat_log::ChatLog,
     imgui_ex,
     squad_tracker::{SquadMemberState, SquadTracker},
     updates::{install_update, tag_to_version_num, UpdateInfo, UpdateStatus},
     NEW_UPDATE,
 };
 use arcdps::{
-    imgui::{ImString, TableFlags, Ui, Window},
-    UserRole,
+    imgui::{ImString, TableFlags, Ui, Window, TableColumnSetup, Id, TableColumnFlags},
+    ChannelType, UserRole,
 };
+use chrono::Local;
 use std::{
     cmp::Ordering,
     time::{Duration, Instant},
 };
 
 pub struct GuiState {
-    main_window_open: bool,
+    ready_check_window_open: bool,
+    chat_log_window_open: bool,
 }
 
 impl GuiState {
     pub fn new() -> Self {
         Self {
-            main_window_open: true,
+            ready_check_window_open: false,
+            chat_log_window_open: false,
         }
     }
 }
 
-pub fn draw(pUi: &Ui, pState: &mut GuiState, pSquadTracker: &SquadTracker) {
-    if pState.main_window_open == true {
-        Window::new(&ImString::new("Squad Manager###SQUAD_MANAGER_MAIN"))
+pub fn draw(pUi: &Ui, pState: &mut GuiState, pSquadTracker: &SquadTracker, pChatLog: &ChatLog) {
+    if pState.ready_check_window_open == true {
+        Window::new(&ImString::new("Squad Manager###SQUAD_MANAGER_READY_CHECK"))
             .always_auto_resize(true)
             .focus_on_appearing(false)
             .no_nav()
             .collapsible(false)
-            .opened(&mut pState.main_window_open)
+            .opened(&mut pState.ready_check_window_open)
             .build(&pUi, || {
                 draw_ready_check_tab(pUi, pSquadTracker);
+            });
+    }
+
+    if pState.chat_log_window_open == true {
+        Window::new(&ImString::new("Chat Log###SQUAD_MANAGER_CHAT_LOG"))
+            .always_auto_resize(true)
+            .focus_on_appearing(false)
+            .no_nav()
+            .collapsible(false)
+            .opened(&mut pState.chat_log_window_open)
+            .build(&pUi, || {
+                draw_chat_log(pUi, pChatLog);
             });
     }
 
@@ -174,14 +190,72 @@ fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
     }
 }
 
+fn draw_chat_log(pUi: &Ui, pChatLog: &ChatLog) {
+    let _table_ref = pUi.begin_table_with_sizing(
+        "chat_log",
+        5,
+        TableFlags::NO_BORDERS_IN_BODY
+        | TableFlags::HIDEABLE // TODO: Use custom context menu instead
+        | TableFlags::REORDERABLE // TODO: Use custom context menu instead
+        | TableFlags::RESIZABLE
+        | TableFlags::CONTEXT_MENU_IN_BODY
+        | TableFlags::SIZING_FIXED_FIT
+        | TableFlags::SCROLL_Y,
+        [0.0, 400.0],
+        0.0,
+    );
+
+    for name in ["To", "Time", "Account", "Character"] {
+        pUi.table_setup_column_with(TableColumnSetup {
+            name,
+            flags: TableColumnFlags::NO_RESIZE,
+            init_width_or_weight: 0.0,
+            user_id: Id::Int(0)});
+    }
+    pUi.table_setup_column_with(TableColumnSetup {
+        name: "Message",
+        flags: TableColumnFlags::WIDTH_STRETCH,
+        init_width_or_weight: 0.0,
+        user_id: Id::Int(0)});
+    pUi.table_headers_row();
+
+    let mut messages = pChatLog.get_all_messages();
+    messages.sort_unstable_by_key(|v| v.1.timestamp);
+
+    for (channel, msg) in messages {
+        pUi.table_next_column();
+        let subgroup_str = match channel.channel_type {
+            ChannelType::Party => "P".to_string(),
+            ChannelType::Squad => {
+                if channel.subgroup == u8::MAX {
+                    "S".to_string()
+                } else {
+                    (channel.subgroup + 1).to_string()
+                }
+            }
+            _ => "?".to_string(),
+        };
+        imgui_ex::centered_text(pUi, &subgroup_str);
+
+        pUi.table_next_column();
+        imgui_ex::centered_text(pUi, msg.timestamp.with_timezone(&Local).format("%X").to_string());
+
+        pUi.table_next_column();
+        imgui_ex::centered_text(pUi, &msg.account_name);
+
+        pUi.table_next_column();
+        imgui_ex::centered_text(pUi,&msg.character_name);
+
+        pUi.table_next_column();
+        pUi.text(&msg.text);
+    }
+}
+
 fn draw_update_window(pUi: &Ui, pUpdate: &mut UpdateInfo) {
     const RED: [f32; 4] = [0.85, 0.0, 0.0, 1.0];
     const GREEN: [f32; 4] = [0.0, 0.85, 0.0, 1.0];
 
-    pUi.text_colored(
-        RED,
-        "A new update for the squad manager addon is available",
-    );
+    pUi.text_colored(RED, "A new update for the squad manager addon is available");
     pUi.text_colored(
         RED,
         format!("Current version: {}", env!("CARGO_PKG_VERSION")),
@@ -213,6 +287,7 @@ fn draw_update_window(pUi: &Ui, pUpdate: &mut UpdateInfo) {
 pub fn draw_options(pUi: &Ui, pState: &mut GuiState) {
     pUi.checkbox(
         &ImString::new("Squad Manager"),
-        &mut pState.main_window_open,
+        &mut pState.ready_check_window_open,
     );
+    pUi.checkbox(&ImString::new("Chat Log"), &mut pState.chat_log_window_open);
 }
