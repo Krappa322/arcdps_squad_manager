@@ -3,15 +3,15 @@
 
 #[macro_use]
 mod infra;
+mod chat_log;
 mod gui;
 mod imgui_ex;
 mod squad_tracker;
-mod chat_log;
 mod updates;
 
-use arcdps::ChatMessageInfo;
 use arcdps::arcdps_export;
 use arcdps::imgui;
+use arcdps::ChatMessageInfo;
 use arcdps::UserInfoIter;
 use chat_log::ChatLog;
 use gui::GuiState;
@@ -70,9 +70,7 @@ fn unofficial_extras_init(
     }
 }
 
-fn unofficial_extras_chat_message(
-    pChatMessage: &ChatMessageInfo,
-) {
+fn unofficial_extras_chat_message(pChatMessage: &ChatMessageInfo) {
     if let Some(chatlog) = &mut *CHAT_LOG.write() {
         chatlog.add(pChatMessage);
     }
@@ -80,10 +78,41 @@ fn unofficial_extras_chat_message(
 
 #[allow(dead_code)]
 fn mock_unofficial_extras_init() {
-    let mut tracker = SQUAD_TRACKER.write();
-    let tracker = tracker.get_or_insert(SquadTracker::new("mock_self"));
-    //tracker.setup_mock_data_active_ready_check();
-    tracker.setup_mock_data_inactive_ready_check();
+    {
+        let mut tracker = SQUAD_TRACKER.write();
+        let tracker = tracker.get_or_insert(SquadTracker::new("mock_self"));
+
+        //tracker.setup_mock_data_active_ready_check();
+        tracker.setup_mock_data_inactive_ready_check();
+    }
+    {
+        let mut chatlog = CHAT_LOG.write();
+        chatlog.get_or_insert(ChatLog::new());
+    }
+    {
+        unofficial_extras_chat_message(&ChatMessageInfo {
+            channel_id: 1,
+            channel_type: arcdps::ChannelType::Squad,
+            subgroup: u8::MAX,
+            is_broadcast: false,
+            timestamp: chrono::DateTime::parse_from_rfc3339("2022-07-09T11:45:24.888Z").unwrap(),
+            account_name: "mock_self",
+            character_name: "character_self",
+            text: "first message",
+        });
+        unofficial_extras_chat_message(
+            &ChatMessageInfo {
+                channel_id: 1,
+                channel_type: arcdps::ChannelType::Squad,
+                subgroup: u8::MAX,
+                is_broadcast: false,
+                timestamp: chrono::DateTime::parse_from_rfc3339("2022-07-09T11:45:24.888Z").unwrap(),
+                account_name: "mock_self",
+                character_name: "character_self",
+                text: "another message which is substantially longer and just keeps going on and on and on like no reasonable person would write a message nonetheless this simulated player does write such a large messsage which forces us to at least wrap what they wrote in order for it not to expand the window completely off screen",
+            }
+        );
+    }
 
     info!("Initialized");
 }
@@ -104,7 +133,14 @@ fn init() -> Result<(), Box<dyn std::error::Error>> {
     info!("{}", "Started panic handler");
 
     find_potential_update();
-    //mock_unofficial_extras_init();
+
+    if arcdps::arcdps_version().contains("ARCDPS_MOCK") {
+        info!(
+            "Performing arcdps mock initialization ({})",
+            arcdps::arcdps_version()
+        );
+        mock_unofficial_extras_init();
+    }
 
     Ok(())
 }

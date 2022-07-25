@@ -12,6 +12,7 @@ pub struct Channel {
 
 #[derive(Debug)]
 pub struct ChatMessage {
+    pub is_broadcast: bool,
     pub timestamp: DateTime<FixedOffset>,
     pub account_name: String,
     pub character_name: String,
@@ -25,6 +26,7 @@ fn split_message(pChatMessage: &arcdps::ChatMessageInfo) -> (Channel, ChatMessag
         subgroup: pChatMessage.subgroup,
     },
     ChatMessage {
+        is_broadcast: pChatMessage.is_broadcast,
         timestamp: pChatMessage.timestamp,
         account_name: pChatMessage.account_name.to_string(),
         character_name: pChatMessage.character_name.to_string(),

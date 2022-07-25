@@ -20,6 +20,7 @@ use std::{
 pub struct GuiState {
     ready_check_window_open: bool,
     chat_log_window_open: bool,
+    chat_log_wrap_width: f32,
 }
 
 impl GuiState {
@@ -27,6 +28,7 @@ impl GuiState {
         Self {
             ready_check_window_open: false,
             chat_log_window_open: false,
+            chat_log_wrap_width: 600.0,
         }
     }
 }
@@ -52,7 +54,7 @@ pub fn draw(pUi: &Ui, pState: &mut GuiState, pSquadTracker: &SquadTracker, pChat
             .collapsible(false)
             .opened(&mut pState.chat_log_window_open)
             .build(&pUi, || {
-                draw_chat_log(pUi, pChatLog);
+                draw_chat_log(pUi, pChatLog, pState.chat_log_wrap_width);
             });
     }
 
@@ -190,14 +192,13 @@ fn draw_ready_check_tab(pUi: &Ui, pSquadTracker: &SquadTracker) {
     }
 }
 
-fn draw_chat_log(pUi: &Ui, pChatLog: &ChatLog) {
+fn draw_chat_log(pUi: &Ui, pChatLog: &ChatLog, pChatLogWrapWidth: f32) {
     let _table_ref = pUi.begin_table_with_sizing(
         "chat_log",
         5,
         TableFlags::NO_BORDERS_IN_BODY
         | TableFlags::HIDEABLE // TODO: Use custom context menu instead
         | TableFlags::REORDERABLE // TODO: Use custom context menu instead
-        | TableFlags::RESIZABLE
         | TableFlags::CONTEXT_MENU_IN_BODY
         | TableFlags::SIZING_FIXED_FIT
         | TableFlags::SCROLL_Y,
@@ -208,14 +209,14 @@ fn draw_chat_log(pUi: &Ui, pChatLog: &ChatLog) {
     for name in ["To", "Time", "Account", "Character"] {
         pUi.table_setup_column_with(TableColumnSetup {
             name,
-            flags: TableColumnFlags::NO_RESIZE,
+            flags: TableColumnFlags::empty(),
             init_width_or_weight: 0.0,
             user_id: Id::Int(0)});
     }
     pUi.table_setup_column_with(TableColumnSetup {
         name: "Message",
-        flags: TableColumnFlags::WIDTH_STRETCH,
-        init_width_or_weight: 0.0,
+        flags: TableColumnFlags::empty(),
+        init_width_or_weight: pChatLogWrapWidth,
         user_id: Id::Int(0)});
     pUi.table_headers_row();
 
@@ -224,7 +225,7 @@ fn draw_chat_log(pUi: &Ui, pChatLog: &ChatLog) {
 
     for (channel, msg) in messages {
         pUi.table_next_column();
-        let subgroup_str = match channel.channel_type {
+        let mut subgroup_str = match channel.channel_type {
             ChannelType::Party => "P".to_string(),
             ChannelType::Squad => {
                 if channel.subgroup == u8::MAX {
@@ -235,6 +236,9 @@ fn draw_chat_log(pUi: &Ui, pChatLog: &ChatLog) {
             }
             _ => "?".to_string(),
         };
+        if msg.is_broadcast {
+            subgroup_str += " (B)";
+        }
         imgui_ex::centered_text(pUi, &subgroup_str);
 
         pUi.table_next_column();
@@ -247,7 +251,7 @@ fn draw_chat_log(pUi: &Ui, pChatLog: &ChatLog) {
         imgui_ex::centered_text(pUi,&msg.character_name);
 
         pUi.table_next_column();
-        pUi.text(&msg.text);
+        pUi.text_wrapped(&msg.text);
     }
 }
 
